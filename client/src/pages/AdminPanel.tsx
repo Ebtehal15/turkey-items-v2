@@ -25,6 +25,22 @@ import useTranslate from '../hooks/useTranslate';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
+const joinBaseUrl = (base: string, path: string) => {
+  const normalizedBase = base.replace(/\/$/, '');
+  const normalizedPath = path.replace(/^\//, '');
+  return `${normalizedBase}/${normalizedPath}`;
+};
+
+const resolveVideoSrc = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  if (/^(?:https?:)?\/\//i.test(value) || value.startsWith('blob:') || value.startsWith('data:')) {
+    return value;
+  }
+  return joinBaseUrl(API_BASE_URL, value);
+};
+
 interface FormState {
   specialId: string;
   mainCategory: string;
@@ -35,6 +51,8 @@ interface FormState {
   classPrice: string;
   classWeight: string;
   prefix: string;
+  classVideoUrl: string;
+  deleteVideo: boolean;
 }
 
 const emptyForm: FormState = {
@@ -47,6 +65,8 @@ const emptyForm: FormState = {
   classPrice: '',
   classWeight: '',
   prefix: '',
+  classVideoUrl: '',
+  deleteVideo: false,
 };
 
 const AdminPanel = () => {
@@ -65,6 +85,20 @@ const AdminPanel = () => {
   const queryClient = useQueryClient();
   const { data: classes = [], isLoading, error } = useClasses(filters);
   const { language, t } = useTranslate();
+  const sanitizedVideoInput = formState.classVideoUrl.trim();
+  const effectiveVideoPath = sanitizedVideoInput.length > 0
+    ? sanitizedVideoInput
+    : (selectedClass?.classVideo ?? null);
+  const copyableVideoUrl = resolveVideoSrc(effectiveVideoPath);
+  const formatNumber = (value: number | null | undefined, suffix = '') => {
+    if (value === null || value === undefined) {
+      return '—';
+    }
+    const formatted = Number.isInteger(value)
+      ? value.toFixed(0)
+      : value.toFixed(2).replace(/\.?0+$/, '');
+    return suffix ? `${formatted} ${suffix}` : formatted;
+  };
 
   const columnLabels = useMemo(
     () => buildColumnLabels(language),
@@ -152,6 +186,11 @@ const AdminPanel = () => {
         URL.revokeObjectURL(videoPreview);
       }
       setVideoPreview(previewUrl);
+      setFormState((prev) => ({
+        ...prev,
+        classVideoUrl: '',
+        deleteVideo: false,
+      }));
     } else {
       setVideoFile(null);
       if (videoPreview) {
@@ -188,6 +227,8 @@ const AdminPanel = () => {
         ? String(record.classWeight)
         : '',
       prefix: '',
+      classVideoUrl: record.classVideo ?? '',
+      deleteVideo: false,
     });
     setVideoFile(null);
     if (videoPreview) {
@@ -235,6 +276,7 @@ const AdminPanel = () => {
     setFormState((prev: FormState) => ({
       ...prev,
       [name]: value,
+      ...(name === 'classVideoUrl' && { deleteVideo: false }),
     }));
   };
 
@@ -256,6 +298,11 @@ const AdminPanel = () => {
     data.append('classFeatures', formState.classFeatures);
     data.append('classPrice', formState.classPrice);
     data.append('classWeight', formState.classWeight);
+    if (formState.deleteVideo) {
+      data.append('classVideoUrl', '__DELETE__');
+    } else if (sanitizedVideoInput.length > 0) {
+      data.append('classVideoUrl', sanitizedVideoInput);
+    }
     if (videoFile) {
       data.append('classVideo', videoFile);
     }
@@ -613,21 +660,17 @@ const AdminPanel = () => {
                             content = item.classFeatures || t('No features provided yet.', 'لم يتم إضافة المزايا بعد.', 'Aún no se han añadido características.');
                             break;
                           case 'classWeight':
-                            content = item.classWeight !== null && item.classWeight !== undefined
-                              ? `${item.classWeight.toFixed(2)} kg`
-                              : '-';
+                            content = formatNumber(item.classWeight, 'kg');
                             break;
                           case 'classPrice':
                             content = item.classPrice !== null && item.classPrice !== undefined
-                              ? `$${(Number.isInteger(item.classPrice)
-                                ? item.classPrice.toFixed(0)
-                                : item.classPrice.toFixed(2).replace(/\.?0+$/, ''))}`
+                              ? `$${formatNumber(item.classPrice)}`
                               : t('Price on request', 'السعر عند الطلب', 'Precio a solicitud');
                             break;
                           case 'classVideo':
                             content = (
                               <VideoPreview
-                                src={item.classVideo ? `${API_BASE_URL}${item.classVideo}` : null}
+                                src={resolveVideoSrc(item.classVideo)}
                                 title={language === 'ar' && item.classNameArabic
                                   ? item.classNameArabic
                                   : item.className}
@@ -785,6 +828,66 @@ const AdminPanel = () => {
                 accept="video/*"
                 onChange={handleVideoChange}
               />
+            </label>
+
+            <label>
+              {t('Video URL', 'رابط الفيديو', 'URL del video')}
+              <div className="input-with-button">
+                <input
+                  type="text"
+                  name="classVideoUrl"
+                  value={formState.classVideoUrl}
+                  onChange={handleInputChange}
+                  placeholder={t('Paste video link or leave empty to use uploaded file', 'ألصق رابط الفيديو أو اتركه فارغًا لاستخدام الملف المرفوع', 'Pega el enlace del video o déjalo vacío para usar el archivo subido')}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (copyableVideoUrl) {
+                      navigator.clipboard.writeText(copyableVideoUrl);
+                    }
+                  }}
+                  disabled={!copyableVideoUrl}
+                >
+                  {t('Copy', 'نسخ', 'Copiar')}
+                </button>
+              </div>
+              {copyableVideoUrl && (
+                <p className="form__hint">
+                  {t('Current link:', 'الرابط الحالي:', 'Enlace actual:')}{' '}
+                  <a href={copyableVideoUrl} target="_blank" rel="noreferrer">
+                    {copyableVideoUrl}
+                  </a>
+                </p>
+              )}
+              {selectedClass && (selectedClass.classVideo || copyableVideoUrl) && (
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() => {
+                    setFormState((prev) => ({
+                      ...prev,
+                      deleteVideo: !prev.deleteVideo,
+                      classVideoUrl: prev.deleteVideo ? (selectedClass.classVideo ?? '') : '',
+                    }));
+                    setVideoFile(null);
+                    if (videoPreview) {
+                      URL.revokeObjectURL(videoPreview);
+                      setVideoPreview(null);
+                    }
+                  }}
+                  style={{ marginTop: '0.5rem' }}
+                >
+                  {formState.deleteVideo
+                    ? t('Restore Video', 'استعادة الفيديو', 'Restaurar video')
+                    : t('Delete Video', 'حذف الفيديو', 'Eliminar video')}
+                </button>
+              )}
+              {formState.deleteVideo && (
+                <p className="form__hint" style={{ color: '#ef4444', marginTop: '0.5rem' }}>
+                  {t('Video will be deleted when you save.', 'سيتم حذف الفيديو عند الحفظ.', 'El video se eliminará al guardar.')}
+                </p>
+              )}
             </label>
 
             <div className="form__actions">

@@ -1049,6 +1049,13 @@ tbody tr:hover {
   position: relative;
 }
 
+.video-modal__player iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 16px;
+  border: none;
+}
+
 .video-modal__close {
   position: absolute;
   top: 1rem;

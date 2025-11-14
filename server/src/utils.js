@@ -42,6 +42,7 @@ const parseClassPayload = (payload = {}, options = {}) => {
     classPrice,
     classWeight,
     specialId,
+    classVideoUrl,
   } = payload;
 
   const parseNumber = (value) => {
@@ -59,6 +60,11 @@ const parseClassPayload = (payload = {}, options = {}) => {
   const parsedWeight = parseNumber(classWeight);
 
   const trimmedSpecialId = specialId ? String(specialId).trim().toUpperCase() : undefined;
+  let normalizedVideoUrl;
+  if (classVideoUrl !== undefined) {
+    const trimmedVideo = String(classVideoUrl).trim();
+    normalizedVideoUrl = trimmedVideo.length ? trimmedVideo : null;
+  }
 
   return {
     mainCategory: mainCategory !== undefined ? String(mainCategory).trim() : undefined,
@@ -73,6 +79,7 @@ const parseClassPayload = (payload = {}, options = {}) => {
     classPrice: parsedPrice,
     classWeight: parsedWeight,
     specialId: trimmedSpecialId,
+    classVideoUrl: normalizedVideoUrl,
     ...options,
   };
 };

@@ -141,6 +141,7 @@ router.post(
   async (req, res) => {
     try {
       const payload = parseClassPayload(req.body);
+      const { classVideoUrl } = payload;
 
       if (!payload.className) {
         res.status(400).json({ message: 'Class name is required.' });
@@ -152,7 +153,9 @@ router.post(
         specialId = await getNextSpecialId();
       }
 
-      const videoPath = req.file ? `/uploads/${req.file.filename}` : null;
+      const videoPath = req.file
+        ? `/uploads/${req.file.filename}`
+        : (classVideoUrl ?? null);
 
       const stmt = db.prepare(`
         INSERT INTO classes (
@@ -214,6 +217,7 @@ router.put(
     const { id } = req.params;
     try {
       const payload = parseClassPayload(req.body);
+      const { classVideoUrl } = payload;
 
       db.get('SELECT * FROM classes WHERE id = ?', [id], async (getErr, current) => {
         if (getErr) {
@@ -232,7 +236,16 @@ router.put(
           return;
         }
 
-        const videoPath = req.file ? `/uploads/${req.file.filename}` : current.class_video;
+        let videoPath = current.class_video;
+        if (req.file) {
+          videoPath = `/uploads/${req.file.filename}`;
+        } else if (classVideoUrl !== undefined) {
+          if (classVideoUrl === '__DELETE__') {
+            videoPath = null;
+          } else {
+            videoPath = classVideoUrl;
+          }
+        }
 
         const updateStmt = db.prepare(`
           UPDATE classes
@@ -271,7 +284,23 @@ router.put(
               return;
             }
 
-            if (req.file && current.class_video) {
+            const shouldRemoveOldVideo = (() => {
+              if (!current.class_video || !current.class_video.startsWith('/uploads/')) {
+                return false;
+              }
+              if (req.file) {
+                return true;
+              }
+              if (videoPath === null) {
+                return true;
+              }
+              if (classVideoUrl !== undefined && classVideoUrl !== current.class_video) {
+                return true;
+              }
+              return false;
+            })();
+
+            if (shouldRemoveOldVideo) {
               const oldPath = path.join(uploadsDir, path.basename(current.class_video));
               fs.unlink(oldPath, () => {});
             }

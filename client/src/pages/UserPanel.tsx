@@ -14,6 +14,22 @@ import useTranslate from '../hooks/useTranslate';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
+const joinBaseUrl = (base: string, path: string) => {
+  const normalizedBase = base.replace(/\/$/, '');
+  const normalizedPath = path.replace(/^\//, '');
+  return `${normalizedBase}/${normalizedPath}`;
+};
+
+const resolveVideoSrc = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+  if (/^(?:https?:)?\/\//i.test(value) || value.startsWith('blob:') || value.startsWith('data:')) {
+    return value;
+  }
+  return joinBaseUrl(API_BASE_URL, value);
+};
+
 type ViewMode = 'table' | 'cards';
 
 const UserPanel = () => {
@@ -21,6 +37,16 @@ const UserPanel = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const { data: classes = [], isLoading, error } = useClasses(filters);
   const { language, t } = useTranslate();
+
+  const formatNumber = (value: number | null | undefined, suffix = '') => {
+    if (value === null || value === undefined) {
+      return '—';
+    }
+    const formatted = Number.isInteger(value)
+      ? value.toFixed(0)
+      : value.toFixed(2).replace(/\.?0+$/, '');
+    return suffix ? `${formatted} ${suffix}` : formatted;
+  };
 
   const columnLabels = useMemo(
     () => buildColumnLabels(language),
@@ -65,20 +91,16 @@ const UserPanel = () => {
       case 'classFeatures':
         return item.classFeatures || t('No features provided yet.', 'لم يتم إضافة المزايا بعد.', 'Aún no se han añadido características.');
       case 'classWeight':
-        return item.classWeight !== null && item.classWeight !== undefined
-          ? `${item.classWeight.toFixed(2)} kg`
-          : '—';
+        return formatNumber(item.classWeight, 'kg');
       case 'classPrice':
         if (item.classPrice !== null && item.classPrice !== undefined) {
-          const price = item.classPrice;
-          const formatted = Number.isInteger(price) ? price.toFixed(0) : price.toFixed(2).replace(/\.?0+$/, '');
-          return `$${formatted}`;
+          return `$${formatNumber(item.classPrice)}`;
         }
         return t('Price on request', 'السعر عند الطلب', 'Precio a solicitud');
       case 'classVideo':
         return (
           <VideoPreview
-            src={item.classVideo ? `${API_BASE_URL}${item.classVideo}` : null}
+            src={resolveVideoSrc(item.classVideo)}
             title={language === 'ar' && item.classNameArabic ? item.classNameArabic : item.className}
             variant="icon"
           />
@@ -232,19 +254,23 @@ const UserPanel = () => {
                     {columnVisibility.classWeight && (
                       <div>
                         <dt>{t('Weight', 'الوزن', 'Peso')}</dt>
-                        <dd>{renderCell(item, 'classWeight')}</dd>
+                        <dd>{formatNumber(item.classWeight, 'kg')}</dd>
                       </div>
                     )}
                     {columnVisibility.classPrice && (
                       <div>
                         <dt>{t('Price', 'السعر', 'Precio')}</dt>
-                        <dd>{renderCell(item, 'classPrice')}</dd>
+                        <dd>
+                          {item.classPrice !== null && item.classPrice !== undefined
+                            ? `$${formatNumber(item.classPrice)}`
+                            : t('Price on request', 'السعر عند الطلب', 'Precio a solicitud')}
+                        </dd>
                       </div>
                     )}
                   </dl>
                   {columnVisibility.classVideo && (
                     <VideoPreview
-                      src={item.classVideo ? `${API_BASE_URL}${item.classVideo}` : null}
+                      src={resolveVideoSrc(item.classVideo)}
                       title={language === 'ar' && item.classNameArabic
                         ? item.classNameArabic
                         : item.className}
