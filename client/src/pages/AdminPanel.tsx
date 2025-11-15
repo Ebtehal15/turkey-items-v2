@@ -47,6 +47,7 @@ interface FormState {
   quality: string;
   className: string;
   classNameArabic: string;
+  classNameEnglish: string;
   classFeatures: string;
   classPrice: string;
   classWeight: string;
@@ -61,6 +62,7 @@ const emptyForm: FormState = {
   quality: '',
   className: '',
   classNameArabic: '',
+  classNameEnglish: '',
   classFeatures: '',
   classPrice: '',
   classWeight: '',
@@ -80,7 +82,8 @@ const AdminPanel = () => {
   const [errorFeedback, setErrorFeedback] = useState<string | null>(null);
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [bulkReport, setBulkReport] = useState<BulkUploadResult | null>(null);
-  const [isMissingVideoExpanded, setIsMissingVideoExpanded] = useState(false);
+  const [updateOnly, setUpdateOnly] = useState(false);
+  const [expandedPanel, setExpandedPanel] = useState<'video' | 'price' | 'arabic' | 'english' | null>(null);
 
   const queryClient = useQueryClient();
   const { data: classes = [], isLoading, error } = useClasses(filters);
@@ -154,6 +157,9 @@ const AdminPanel = () => {
   const totalVideos = useMemo(() => classes.filter((item) => item.classVideo).length, [classes]);
 
   const missingVideoClasses = useMemo(() => classes.filter((item) => !item.classVideo), [classes]);
+  const classesWithoutPrice = useMemo(() => classes.filter((item) => item.classPrice === null || item.classPrice === undefined), [classes]);
+  const classesWithoutArabic = useMemo(() => classes.filter((item) => !item.classNameArabic || item.classNameArabic.trim() === ''), [classes]);
+  const classesWithoutEnglish = useMemo(() => classes.filter((item) => !item.classNameEnglish || item.classNameEnglish.trim() === ''), [classes]);
   const activeColumnCount = useMemo(
     () => Object.values(columnVisibility).filter(Boolean).length,
     [columnVisibility],
@@ -219,6 +225,7 @@ const AdminPanel = () => {
       quality: record.quality ?? '',
       className: record.className ?? '',
       classNameArabic: record.classNameArabic ?? '',
+      classNameEnglish: record.classNameEnglish ?? '',
       classFeatures: record.classFeatures ?? '',
       classPrice: record.classPrice !== null && record.classPrice !== undefined
         ? String(record.classPrice)
@@ -295,6 +302,7 @@ const AdminPanel = () => {
     data.append('quality', formState.quality);
     data.append('className', formState.className);
     data.append('classNameArabic', formState.classNameArabic);
+    data.append('classNameEnglish', formState.classNameEnglish);
     data.append('classFeatures', formState.classFeatures);
     data.append('classPrice', formState.classPrice);
     data.append('classWeight', formState.classWeight);
@@ -397,7 +405,11 @@ const AdminPanel = () => {
   };
 
   const handleDelete = (record: ClassRecord) => {
-    const localizedName = language === 'ar' && record.classNameArabic ? record.classNameArabic : record.className;
+    const localizedName = (() => {
+      if (language === 'ar' && record.classNameArabic) return record.classNameArabic;
+      if (language === 'en' && record.classNameEnglish) return record.classNameEnglish;
+      return record.className;
+    })();
     const message = language === 'ar'
       ? `حذف ${localizedName}؟ لا يمكن التراجع عن هذا الإجراء.`
       : `Delete ${localizedName}? This action cannot be undone.`;
@@ -448,6 +460,7 @@ const AdminPanel = () => {
     }
     const data = new FormData();
     data.append('file', excelFile);
+    data.append('updateOnly', updateOnly ? 'true' : 'false');
     bulkUploadMutation.mutate(data);
   };
 
@@ -481,6 +494,245 @@ const AdminPanel = () => {
         </div>
       )}
 
+      {isFormVisible && (
+        <form className="card form" onSubmit={handleSubmit}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h2 style={{ margin: 0 }}>{selectedClass ? t('Edit Class', 'تعديل الصنف', 'Editar producto') : t('Add New Class', 'إضافة صنف جديد', 'Agregar producto')}</h2>
+            <button
+              type="button"
+              onClick={() => resetForm(true)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                fontSize: '1.5rem',
+                cursor: 'pointer',
+                color: '#64748b',
+                padding: '0.25rem 0.5rem',
+                borderRadius: '4px',
+                transition: 'all 0.2s ease',
+                lineHeight: 1,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#ef4444';
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = '#64748b';
+                e.currentTarget.style.background = 'transparent';
+              }}
+              aria-label={t('Close form', 'إغلاق النموذج', 'Cerrar formulario')}
+              title={t('Close', 'إغلاق', 'Cerrar')}
+            >
+              ×
+            </button>
+          </div>
+
+          <label>
+            {t('Special ID', 'الرمز الخاص', 'ID especial')}
+            <input
+              type="text"
+              name="specialId"
+              value={formState.specialId}
+              onChange={handleInputChange}
+              placeholder="CR01"
+            />
+          </label>
+
+          <label>
+            {t('Prefix for Auto ID', 'بادئة المعرف التلقائي', 'Prefijo para ID automático')}
+            <div className="input-with-button">
+              <input
+                type="text"
+                name="prefix"
+                value={formState.prefix}
+                onChange={handleInputChange}
+                placeholder="CR"
+                maxLength={4}
+              />
+              <button
+                type="button"
+                onClick={handleGenerateId}
+                disabled={actionInProgress}
+              >
+                {t('Generate', 'توليد', 'Generar')}
+              </button>
+            </div>
+          </label>
+
+          <label>
+            {t('Main Category', 'الفئة الرئيسية', 'Categoría principal')}
+            <input
+              type="text"
+              name="mainCategory"
+              value={formState.mainCategory}
+              onChange={handleInputChange}
+            />
+          </label>
+
+          <label>
+            {t('Group', 'المجموعة', 'Grupo')}
+            <input
+              type="text"
+              name="quality"
+              value={formState.quality}
+              onChange={handleInputChange}
+            />
+          </label>
+
+          <label>
+            {t('Class Name*', 'اسم الصنف*', 'Nombre del producto*')}
+            <input
+              type="text"
+              name="className"
+              value={formState.className}
+              onChange={handleInputChange}
+              required
+            />
+          </label>
+
+          <label>
+            {t('Class Name (Arabic)', 'اسم الصنف (عربي)', 'Nombre en árabe')}
+            <input
+              type="text"
+              name="classNameArabic"
+              value={formState.classNameArabic}
+              onChange={handleInputChange}
+              placeholder="اسم الصنف"
+              dir="rtl"
+            />
+          </label>
+
+          <label>
+            {t('Class Name (English)', 'اسم الصنف (إنجليزي)', 'Nombre en inglés')}
+            <input
+              type="text"
+              name="classNameEnglish"
+              value={formState.classNameEnglish}
+              onChange={handleInputChange}
+              placeholder="Class Name"
+            />
+          </label>
+
+          <label>
+            {t('Class Features', 'مميزات الصنف', 'Características del producto')}
+            <textarea
+              name="classFeatures"
+              value={formState.classFeatures}
+              onChange={handleInputChange}
+              rows={4}
+            />
+          </label>
+
+          <label>
+            {t('Class Weight (kg)', 'وزن الصنف (كجم)', 'Peso del producto (kg)')}
+            <input
+              type="number"
+              name="classWeight"
+              value={formState.classWeight}
+              onChange={handleInputChange}
+              step="0.01"
+              min="0"
+            />
+          </label>
+
+          <label>
+            {t('Class Price', 'سعر الصنف', 'Precio del producto')}
+            <input
+              type="number"
+              name="classPrice"
+              value={formState.classPrice}
+              onChange={handleInputChange}
+              step="0.01"
+              min="0"
+            />
+          </label>
+
+          <label>
+            {t('Class Video', 'فيديو الصنف', 'Video del producto')}
+            <input
+              type="file"
+              name="classVideo"
+              accept="video/*"
+              onChange={handleVideoChange}
+            />
+          </label>
+
+          <label>
+            {t('Video URL', 'رابط الفيديو', 'URL del video')}
+            <div className="input-with-button">
+              <input
+                type="text"
+                name="classVideoUrl"
+                value={formState.classVideoUrl}
+                onChange={handleInputChange}
+                placeholder={t('Paste video link or leave empty to use uploaded file', 'ألصق رابط الفيديو أو اتركه فارغًا لاستخدام الملف المرفوع', 'Pega el enlace del video o déjalo vacío para usar el archivo subido')}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (copyableVideoUrl) {
+                    navigator.clipboard.writeText(copyableVideoUrl);
+                  }
+                }}
+                disabled={!copyableVideoUrl}
+              >
+                {t('Copy', 'نسخ', 'Copiar')}
+              </button>
+            </div>
+            {copyableVideoUrl && (
+              <p className="form__hint">
+                {t('Current link:', 'الرابط الحالي:', 'Enlace actual:')}{' '}
+                <a href={copyableVideoUrl} target="_blank" rel="noreferrer">
+                  {copyableVideoUrl}
+                </a>
+              </p>
+            )}
+            {selectedClass && (selectedClass.classVideo || copyableVideoUrl) && (
+              <button
+                type="button"
+                className="danger"
+                onClick={() => {
+                  setFormState((prev) => ({
+                    ...prev,
+                    deleteVideo: !prev.deleteVideo,
+                    classVideoUrl: prev.deleteVideo ? (selectedClass.classVideo ?? '') : '',
+                  }));
+                  setVideoFile(null);
+                  if (videoPreview) {
+                    URL.revokeObjectURL(videoPreview);
+                    setVideoPreview(null);
+                  }
+                }}
+                style={{ marginTop: '0.5rem' }}
+              >
+                {formState.deleteVideo
+                  ? t('Restore Video', 'استعادة الفيديو', 'Restaurar video')
+                  : t('Delete Video', 'حذف الفيديو', 'Eliminar video')}
+              </button>
+            )}
+            {formState.deleteVideo && (
+              <p className="form__hint" style={{ color: '#ef4444', marginTop: '0.5rem' }}>
+                {t('Video will be deleted when you save.', 'سيتم حذف الفيديو عند الحفظ.', 'El video se eliminará al guardar.')}
+              </p>
+            )}
+          </label>
+
+          <div className="form__actions">
+            <button type="submit" disabled={actionInProgress}>
+              {selectedClass ? t('Update Class', 'تحديث الصنف', 'Actualizar producto') : t('Create Class', 'إنشاء الصنف', 'Crear producto')}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => resetForm(true)}
+              disabled={actionInProgress}
+            >
+              {t('Cancel', 'إلغاء', 'Cancelar')}
+            </button>
+          </div>
+        </form>
+      )}
+
       <div className="card admin-stats">
         <div className="admin-stats__metrics">
           <div className="admin-stat">
@@ -495,29 +747,161 @@ const AdminPanel = () => {
             <span>{totalVideos}</span>
             <p>{t('Videos Uploaded', 'عدد مقاطع الفيديو', 'Videos Subidos')}</p>
           </div>
-          <div className="admin-stat admin-stat--warning">
+          <div 
+            className={`admin-stat admin-stat--warning ${expandedPanel === 'video' ? 'admin-stat--active' : ''}`}
+            style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
+            onClick={() => setExpandedPanel(expandedPanel === 'video' ? null : 'video')}
+          >
             <span>{missingVideoClasses.length}</span>
             <p>{t('Missing Videos', 'أصناف بلا فيديو', 'Productos sin Video')}</p>
           </div>
+          <div 
+            className={`admin-stat admin-stat--warning ${expandedPanel === 'price' ? 'admin-stat--active' : ''}`}
+            style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
+            onClick={() => setExpandedPanel(expandedPanel === 'price' ? null : 'price')}
+          >
+            <span>{classesWithoutPrice.length}</span>
+            <p>{t('Without Price', 'بلا سعر', 'Sin Precio')}</p>
+          </div>
+          <div 
+            className={`admin-stat admin-stat--warning ${expandedPanel === 'arabic' ? 'admin-stat--active' : ''}`}
+            style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
+            onClick={() => setExpandedPanel(expandedPanel === 'arabic' ? null : 'arabic')}
+          >
+            <span>{classesWithoutArabic.length}</span>
+            <p>{t('Without Arabic Translation', 'بلا ترجمة عربية', 'Sin Traducción Árabe')}</p>
+          </div>
+          <div 
+            className={`admin-stat admin-stat--warning ${expandedPanel === 'english' ? 'admin-stat--active' : ''}`}
+            style={{ cursor: 'pointer', transition: 'all 0.3s ease' }}
+            onClick={() => setExpandedPanel(expandedPanel === 'english' ? null : 'english')}
+          >
+            <span>{classesWithoutEnglish.length}</span>
+            <p>{t('Without English Translation', 'بلا ترجمة إنجليزية', 'Sin Traducción Inglesa')}</p>
+          </div>
         </div>
-        {missingVideoClasses.length > 0 && (
-          <div className={`admin-stats__missing ${isMissingVideoExpanded ? 'admin-stats__missing--expanded' : ''}`}>
-            <button
-              type="button"
-              className="admin-stats__toggle"
-              onClick={() => setIsMissingVideoExpanded((prev) => !prev)}
-            >
+        {missingVideoClasses.length > 0 && expandedPanel === 'video' && (
+          <div className="admin-stats__missing admin-stats__missing--expanded">
+            <div className="admin-stats__toggle">
               <span>
                 {t('Classes without video', 'أصناف بلا فيديو', 'Productos sin video')}
                 {' '}
                 ({missingVideoClasses.length})
               </span>
-              <span aria-hidden="true">{isMissingVideoExpanded ? '−' : '+'}</span>
-            </button>
-            <div className="admin-stats__missing-panel" hidden={!isMissingVideoExpanded}>
+              <span aria-hidden="true">−</span>
+            </div>
+            <div className="admin-stats__missing-panel">
               <ul>
                 {missingVideoClasses.map((item) => (
-                  <li key={item.id}>
+                  <li 
+                    key={item.id}
+                    onClick={() => {
+                      handleEdit(item);
+                      setExpandedPanel(null);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <span className="admin-stats__missing-name">
+                      {(() => {
+                        if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
+                        if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
+                        return item.className;
+                      })()}
+                    </span>
+                    <span className="admin-stats__missing-id">{item.specialId}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        {classesWithoutPrice.length > 0 && expandedPanel === 'price' && (
+          <div className="admin-stats__missing admin-stats__missing--expanded">
+            <div className="admin-stats__toggle">
+              <span>
+                {t('Classes without price', 'أصناف بلا سعر', 'Productos sin precio')}
+                {' '}
+                ({classesWithoutPrice.length})
+              </span>
+              <span aria-hidden="true">−</span>
+            </div>
+            <div className="admin-stats__missing-panel">
+              <ul>
+                {classesWithoutPrice.map((item) => (
+                  <li 
+                    key={item.id}
+                    onClick={() => {
+                      handleEdit(item);
+                      setExpandedPanel(null);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <span className="admin-stats__missing-name">
+                      {(() => {
+                        if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
+                        if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
+                        return item.className;
+                      })()}
+                    </span>
+                    <span className="admin-stats__missing-id">{item.specialId}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        {classesWithoutArabic.length > 0 && expandedPanel === 'arabic' && (
+          <div className="admin-stats__missing admin-stats__missing--expanded">
+            <div className="admin-stats__toggle">
+              <span>
+                {t('Classes without Arabic translation', 'أصناف بلا ترجمة عربية', 'Productos sin traducción árabe')}
+                {' '}
+                ({classesWithoutArabic.length})
+              </span>
+              <span aria-hidden="true">−</span>
+            </div>
+            <div className="admin-stats__missing-panel">
+              <ul>
+                {classesWithoutArabic.map((item) => (
+                  <li 
+                    key={item.id}
+                    onClick={() => {
+                      handleEdit(item);
+                      setExpandedPanel(null);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <span className="admin-stats__missing-name">
+                      {item.className}
+                    </span>
+                    <span className="admin-stats__missing-id">{item.specialId}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+        {classesWithoutEnglish.length > 0 && expandedPanel === 'english' && (
+          <div className="admin-stats__missing admin-stats__missing--expanded">
+            <div className="admin-stats__toggle">
+              <span>
+                {t('Classes without English translation', 'أصناف بلا ترجمة إنجليزية', 'Productos sin traducción inglesa')}
+                {' '}
+                ({classesWithoutEnglish.length})
+              </span>
+              <span aria-hidden="true">−</span>
+            </div>
+            <div className="admin-stats__missing-panel">
+              <ul>
+                {classesWithoutEnglish.map((item) => (
+                  <li 
+                    key={item.id}
+                    onClick={() => {
+                      handleEdit(item);
+                      setExpandedPanel(null);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <span className="admin-stats__missing-name">
                       {language === 'ar' && item.classNameArabic ? item.classNameArabic : item.className}
                     </span>
@@ -649,12 +1033,19 @@ const AdminPanel = () => {
                             content = item.quality;
                             break;
                           case 'className':
-                            content = language === 'ar' && item.classNameArabic
-                              ? item.classNameArabic
-                              : item.className;
+                            if (language === 'ar' && item.classNameArabic) {
+                              content = item.classNameArabic;
+                            } else if (language === 'en' && item.classNameEnglish) {
+                              content = item.classNameEnglish;
+                            } else {
+                              content = item.className;
+                            }
                             break;
                           case 'classNameArabic':
                             content = item.classNameArabic || '-';
+                            break;
+                          case 'classNameEnglish':
+                            content = item.classNameEnglish || '-';
                             break;
                           case 'classFeatures':
                             content = item.classFeatures || t('No features provided yet.', 'لم يتم إضافة المزايا بعد.', 'Aún no se han añadido características.');
@@ -671,9 +1062,11 @@ const AdminPanel = () => {
                             content = (
                               <VideoPreview
                                 src={resolveVideoSrc(item.classVideo)}
-                                title={language === 'ar' && item.classNameArabic
-                                  ? item.classNameArabic
-                                  : item.className}
+                                title={(() => {
+                                  if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
+                                  if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
+                                  return item.className;
+                                })()}
                               />
                             );
                             break;
@@ -707,212 +1100,13 @@ const AdminPanel = () => {
           )}
         </div>
 
-        {isFormVisible && (
-          <form className="card form" onSubmit={handleSubmit}>
-            <h2>{selectedClass ? t('Edit Class', 'تعديل الصنف', 'Editar producto') : t('Add New Class', 'إضافة صنف جديد', 'Agregar producto')}</h2>
-
-            <label>
-              {t('Special ID', 'الرمز الخاص', 'ID especial')}
-              <input
-                type="text"
-                name="specialId"
-                value={formState.specialId}
-                onChange={handleInputChange}
-                placeholder="CR01"
-              />
-            </label>
-
-            <label>
-              {t('Prefix for Auto ID', 'بادئة المعرف التلقائي', 'Prefijo para ID automático')}
-              <div className="input-with-button">
-                <input
-                  type="text"
-                  name="prefix"
-                  value={formState.prefix}
-                  onChange={handleInputChange}
-                  placeholder="CR"
-                  maxLength={4}
-                />
-                <button
-                  type="button"
-                  onClick={handleGenerateId}
-                  disabled={actionInProgress}
-                >
-                  {t('Generate', 'توليد', 'Generar')}
-                </button>
-              </div>
-            </label>
-
-            <label>
-              {t('Main Category', 'الفئة الرئيسية', 'Categoría principal')}
-              <input
-                type="text"
-                name="mainCategory"
-                value={formState.mainCategory}
-                onChange={handleInputChange}
-              />
-            </label>
-
-            <label>
-              {t('Group', 'المجموعة', 'Grupo')}
-              <input
-                type="text"
-                name="quality"
-                value={formState.quality}
-                onChange={handleInputChange}
-              />
-            </label>
-
-            <label>
-              {t('Class Name*', 'اسم الصنف*', 'Nombre del producto*')}
-              <input
-                type="text"
-                name="className"
-                value={formState.className}
-                onChange={handleInputChange}
-                required
-              />
-            </label>
-
-            <label>
-              {t('Class Name (Arabic)', 'اسم الصنف (عربي)', 'Nombre en árabe')}
-              <input
-                type="text"
-                name="classNameArabic"
-                value={formState.classNameArabic}
-                onChange={handleInputChange}
-                placeholder="اسم الصنف"
-                dir="rtl"
-              />
-            </label>
-
-            <label>
-              {t('Class Features', 'مميزات الصنف', 'Características del producto')}
-              <textarea
-                name="classFeatures"
-                value={formState.classFeatures}
-                onChange={handleInputChange}
-                rows={4}
-              />
-            </label>
-
-            <label>
-              {t('Class Weight (kg)', 'وزن الصنف (كجم)', 'Peso del producto (kg)')}
-              <input
-                type="number"
-                name="classWeight"
-                value={formState.classWeight}
-                onChange={handleInputChange}
-                step="0.01"
-                min="0"
-              />
-            </label>
-
-            <label>
-              {t('Class Price', 'سعر الصنف', 'Precio del producto')}
-              <input
-                type="number"
-                name="classPrice"
-                value={formState.classPrice}
-                onChange={handleInputChange}
-                step="0.01"
-                min="0"
-              />
-            </label>
-
-            <label>
-              {t('Class Video', 'فيديو الصنف', 'Video del producto')}
-              <input
-                type="file"
-                name="classVideo"
-                accept="video/*"
-                onChange={handleVideoChange}
-              />
-            </label>
-
-            <label>
-              {t('Video URL', 'رابط الفيديو', 'URL del video')}
-              <div className="input-with-button">
-                <input
-                  type="text"
-                  name="classVideoUrl"
-                  value={formState.classVideoUrl}
-                  onChange={handleInputChange}
-                  placeholder={t('Paste video link or leave empty to use uploaded file', 'ألصق رابط الفيديو أو اتركه فارغًا لاستخدام الملف المرفوع', 'Pega el enlace del video o déjalo vacío para usar el archivo subido')}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (copyableVideoUrl) {
-                      navigator.clipboard.writeText(copyableVideoUrl);
-                    }
-                  }}
-                  disabled={!copyableVideoUrl}
-                >
-                  {t('Copy', 'نسخ', 'Copiar')}
-                </button>
-              </div>
-              {copyableVideoUrl && (
-                <p className="form__hint">
-                  {t('Current link:', 'الرابط الحالي:', 'Enlace actual:')}{' '}
-                  <a href={copyableVideoUrl} target="_blank" rel="noreferrer">
-                    {copyableVideoUrl}
-                  </a>
-                </p>
-              )}
-              {selectedClass && (selectedClass.classVideo || copyableVideoUrl) && (
-                <button
-                  type="button"
-                  className="danger"
-                  onClick={() => {
-                    setFormState((prev) => ({
-                      ...prev,
-                      deleteVideo: !prev.deleteVideo,
-                      classVideoUrl: prev.deleteVideo ? (selectedClass.classVideo ?? '') : '',
-                    }));
-                    setVideoFile(null);
-                    if (videoPreview) {
-                      URL.revokeObjectURL(videoPreview);
-                      setVideoPreview(null);
-                    }
-                  }}
-                  style={{ marginTop: '0.5rem' }}
-                >
-                  {formState.deleteVideo
-                    ? t('Restore Video', 'استعادة الفيديو', 'Restaurar video')
-                    : t('Delete Video', 'حذف الفيديو', 'Eliminar video')}
-                </button>
-              )}
-              {formState.deleteVideo && (
-                <p className="form__hint" style={{ color: '#ef4444', marginTop: '0.5rem' }}>
-                  {t('Video will be deleted when you save.', 'سيتم حذف الفيديو عند الحفظ.', 'El video se eliminará al guardar.')}
-                </p>
-              )}
-            </label>
-
-            <div className="form__actions">
-              <button type="submit" disabled={actionInProgress}>
-                {selectedClass ? t('Update Class', 'تحديث الصنف', 'Actualizar producto') : t('Create Class', 'إنشاء الصنف', 'Crear producto')}
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => resetForm(true)}
-                disabled={actionInProgress}
-              >
-                {t('Cancel', 'إلغاء', 'Cancelar')}
-              </button>
-            </div>
-          </form>
-        )}
-
         <form className="card form" onSubmit={handleBulkUpload}>
           <h2>{t('Bulk Upload', 'رفع جماعي', 'Carga masiva')}</h2>
           <p className="form__hint">
             {t(
-              'Upload an Excel file with columns: Special ID, Main Category, Group, Class Name, Class Name Arabic, Class Features, Class Price, Class KG, Class Video.',
-              'قم برفع ملف إكسل يحتوي على الأعمدة: الرمز الخاص، الفئة الرئيسية، المجموعة، اسم الصنف، اسم الصنف بالعربية، مميزات الصنف، سعر الصنف، وزن الصنف (كجم)، فيديو الصنف.',
-              'Carga un archivo Excel con las columnas: ID especial, categoría principal, grupo, nombre del producto, nombre en árabe, características del producto, precio, peso (kg), video del producto.',
+              'Upload an Excel file with columns: Special ID, Main Category, Group, Class Name, Class Name Arabic, Class Name English, Class Features, Class Price, Class KG, Class Video.',
+              'قم برفع ملف إكسل يحتوي على الأعمدة: الرمز الخاص، الفئة الرئيسية، المجموعة، اسم الصنف، اسم الصنف بالعربية، اسم الصنف بالإنجليزية، مميزات الصنف، سعر الصنف، وزن الصنف (كجم)، فيديو الصنف.',
+              'Carga un archivo Excel con las columnas: ID especial, categoría principal, grupo, nombre del producto, nombre en árabe, nombre en inglés, características del producto, precio, peso (kg), video del producto.',
             )}
           </p>
           <input
@@ -920,6 +1114,20 @@ const AdminPanel = () => {
             accept=".xlsx,.xls"
             onChange={handleExcelChange}
           />
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={updateOnly}
+              onChange={(e) => setUpdateOnly(e.target.checked)}
+            />
+            <span>
+              {t(
+                'Update only existing records (skip new records)',
+                'تحديث السجلات الموجودة فقط (تخطي السجلات الجديدة)',
+                'Actualizar solo registros existentes (omitir registros nuevos)'
+              )}
+            </span>
+          </label>
           <button type="submit" disabled={!excelFile || actionInProgress}>
             {t('Upload Excel', 'رفع ملف إكسل', 'Subir Excel')}
           </button>

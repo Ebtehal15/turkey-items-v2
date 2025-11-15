@@ -57,6 +57,7 @@ const mapRowToResponse = (row) => ({
   quality: row.quality,
   className: row.class_name,
   classNameArabic: row.class_name_ar,
+  classNameEnglish: row.class_name_en,
   classFeatures: row.class_features,
   classPrice: row.class_price,
   classWeight: row.class_weight,
@@ -72,9 +73,9 @@ router.get('/', (req, res) => {
   const params = [];
 
   if (search) {
-    filters.push('(LOWER(special_id) LIKE ? OR LOWER(class_name) LIKE ? OR LOWER(IFNULL(class_name_ar, "")) LIKE ?)');
+    filters.push('(LOWER(special_id) LIKE ? OR LOWER(class_name) LIKE ? OR LOWER(IFNULL(class_name_ar, "")) LIKE ? OR LOWER(IFNULL(class_name_en, "")) LIKE ?)');
     const term = `%${search.toLowerCase()}%`;
-    params.push(term, term, term);
+    params.push(term, term, term, term);
   }
 
   if (category) {
@@ -164,11 +165,12 @@ router.post(
           quality,
           class_name,
           class_name_ar,
+          class_name_en,
           class_features,
           class_price,
           class_weight,
           class_video
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -177,6 +179,7 @@ router.post(
         payload.quality ?? '',
         payload.className,
         payload.classNameArabic || null,
+        payload.classNameEnglish || null,
         payload.classFeatures || null,
         payload.classPrice,
         payload.classWeight,
@@ -254,6 +257,7 @@ router.put(
               quality = ?,
               class_name = ?,
               class_name_ar = ?,
+              class_name_en = ?,
               class_features = ?,
               class_price = ?,
               class_weight = ?,
@@ -270,6 +274,7 @@ router.put(
           payload.quality !== undefined ? payload.quality : current.quality,
           payload.className || current.class_name,
           payload.classNameArabic !== undefined ? payload.classNameArabic : current.class_name_ar,
+          payload.classNameEnglish !== undefined ? payload.classNameEnglish : current.class_name_en,
           payload.classFeatures !== undefined ? payload.classFeatures : current.class_features,
           payload.classPrice !== undefined ? payload.classPrice : current.class_price,
           payload.classWeight !== undefined ? payload.classWeight : current.class_weight,
@@ -391,6 +396,7 @@ router.post(
       return;
     }
 
+    const updateOnly = req.body.updateOnly === 'true' || req.body.updateOnly === true;
     const tempFilePath = req.file.path;
 
     try {
@@ -412,15 +418,45 @@ router.post(
           quality,
           class_name,
           class_name_ar,
+          class_name_en,
           class_features,
           class_price,
           class_weight,
           class_video
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const updateStmt = db.prepare(`
+        UPDATE classes
+        SET main_category = ?,
+            quality = ?,
+            class_name = ?,
+            class_name_ar = ?,
+            class_name_en = ?,
+            class_features = ?,
+            class_price = ?,
+            class_weight = ?,
+            class_video = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE special_id = ?
       `);
 
       const processed = [];
       const skipped = [];
+      let pendingOperations = 0;
+
+      // If no rows, return immediately
+      if (rows.length === 0) {
+        insertStmt.finalize();
+        updateStmt.finalize();
+        fs.unlink(tempFilePath, () => {});
+        res.json({
+          processedCount: 0,
+          skippedCount: 0,
+          skipped: [],
+        });
+        return;
+      }
 
       db.serialize(() => {
         rows.forEach((row, index) => {
@@ -430,6 +466,7 @@ router.post(
             quality: row['Group'] || row['group'] || row['Quality'] || row['quality'],
             className: row['Class Name'] || row['class_name'],
             classNameArabic: row['Class Name Arabic'] || row['class_name_ar'],
+            classNameEnglish: row['Class Name English'] || row['class_name_en'],
             classFeatures: row['Class Features'] || row['class_features'],
             classPrice: row['Class Price'] || row['class_price'],
             classWeight: row['Class KG'] || row['class_weight'] || row['Class Weight'],
@@ -444,46 +481,109 @@ router.post(
               return;
             }
 
+            if (!parsed.specialId) {
+              skipped.push({ index: index + 2, reason: 'Special ID is required.' });
+              return;
+            }
+
             const priceValue = parsed.classPrice;
             const weightValue = parsed.classWeight;
             const specialIdValue = parsed.specialId;
 
-            insertStmt.run(
-              specialIdValue,
-              parsed.mainCategory ?? '',
-              parsed.quality ?? '',
-              parsed.className,
-              parsed.classNameArabic || null,
-              parsed.classFeatures || null,
-              priceValue,
-              weightValue,
-              parsed.classVideo || null,
-              (err) => {
+            pendingOperations += 1;
+
+            // Check if record exists
+            db.get('SELECT id FROM classes WHERE special_id = ?', [specialIdValue], (getErr, existing) => {
+              if (getErr) {
+                skipped.push({ index: index + 2, reason: `Database error: ${getErr.message}` });
+                pendingOperations -= 1;
+                if (pendingOperations === 0) {
+                  insertStmt.finalize();
+                  updateStmt.finalize();
+                  fs.unlink(tempFilePath, () => {});
+                  res.json({
+                    processedCount: processed.length,
+                    skippedCount: skipped.length,
+                    skipped,
+                  });
+                }
+                return;
+              }
+
+              const operationCallback = (err) => {
+                pendingOperations -= 1;
                 if (err) {
                   skipped.push({ index: index + 2, reason: err.message });
                 } else {
-                  processed.push(parsed);
+                  processed.push({ ...parsed, action: existing ? 'updated' : 'created' });
+                }
+
+                if (pendingOperations === 0) {
+                  insertStmt.finalize();
+                  updateStmt.finalize();
+                  fs.unlink(tempFilePath, () => {});
+                  res.json({
+                    processedCount: processed.length,
+                    skippedCount: skipped.length,
+                    skipped,
+                  });
+                }
+              };
+
+              if (existing) {
+                // Update existing record
+                updateStmt.run(
+                  parsed.mainCategory ?? '',
+                  parsed.quality ?? '',
+                  parsed.className,
+                  parsed.classNameArabic || null,
+                  parsed.classNameEnglish || null,
+                  parsed.classFeatures || null,
+                  priceValue,
+                  weightValue,
+                  parsed.classVideo || null,
+                  specialIdValue,
+                  operationCallback
+                );
+              } else {
+                // Insert new record (only if updateOnly is false)
+                if (updateOnly) {
+                  // Skip new records when updateOnly is true
+                  skipped.push({ index: index + 2, reason: 'Record not found (update only mode).' });
+                  pendingOperations -= 1;
+                  if (pendingOperations === 0) {
+                    insertStmt.finalize();
+                    updateStmt.finalize();
+                    fs.unlink(tempFilePath, () => {});
+                    res.json({
+                      processedCount: processed.length,
+                      skippedCount: skipped.length,
+                      skipped,
+                    });
+                  }
+                } else {
+                  // Insert new record
+                  insertStmt.run(
+                    specialIdValue,
+                    parsed.mainCategory ?? '',
+                    parsed.quality ?? '',
+                    parsed.className,
+                    parsed.classNameArabic || null,
+                    parsed.classNameEnglish || null,
+                    parsed.classFeatures || null,
+                    priceValue,
+                    weightValue,
+                    parsed.classVideo || null,
+                    operationCallback
+                  );
                 }
               }
-            );
+            });
           } catch (error) {
             skipped.push({ index: index + 2, reason: error.message });
+            // Note: pendingOperations is not incremented for caught errors,
+            // so we don't need to decrement it here
           }
-        });
-      });
-
-      insertStmt.finalize((finalizeErr) => {
-        fs.unlink(tempFilePath, () => {});
-
-        if (finalizeErr) {
-          res.status(500).json({ message: 'Failed to finalize bulk upload', error: finalizeErr.message });
-          return;
-        }
-
-        res.json({
-          processedCount: processed.length,
-          skippedCount: skipped.length,
-          skipped,
         });
       });
     } catch (error) {

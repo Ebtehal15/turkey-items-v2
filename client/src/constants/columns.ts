@@ -27,6 +27,11 @@ const columnLabelMap: Record<ColumnKey, Record<SupportedLanguage, string>> = {
     ar: 'اسم الصنف (عربي)',
     es: 'Nombre (Árabe)',
   },
+  classNameEnglish: {
+    en: 'Class Name (English)',
+    ar: 'اسم الصنف (إنجليزي)',
+    es: 'Nombre (Inglés)',
+  },
   classFeatures: {
     en: 'Features',
     ar: 'المميزات',
@@ -68,6 +73,7 @@ export const orderedColumns: ColumnKey[] = [
   'quality',
   'className',
   'classNameArabic',
+  'classNameEnglish',
   'classFeatures',
   'classWeight',
   'classPrice',
@@ -77,7 +83,7 @@ export const orderedColumns: ColumnKey[] = [
 export const columnOptions = orderedColumns.map((key) => ({ key }));
 
 export const defaultColumnVisibility: ColumnVisibility = orderedColumns.reduce((acc, key) => {
-  acc[key] = key !== 'classNameArabic';
+  acc[key] = key !== 'classNameArabic' && key !== 'classNameEnglish';
   return acc;
 }, {} as ColumnVisibility);
 

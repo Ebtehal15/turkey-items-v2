@@ -3,10 +3,9 @@ import {
   useCallback,
   useContext,
   useMemo,
-  useState,
-  useEffect,
 } from 'react';
 import type { ReactNode } from 'react';
+import { usePassword } from './PasswordContext';
 
 interface AdminAccessContextValue {
   isAdmin: boolean;
@@ -16,35 +15,22 @@ interface AdminAccessContextValue {
 
 const AdminAccessContext = createContext<AdminAccessContextValue | undefined>(undefined);
 
-const STORAGE_KEY = 'adminAuthorized';
-
 interface ProviderProps {
   children: ReactNode;
 }
 
 export const AdminAccessProvider = ({ children }: ProviderProps) => {
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-    return window.localStorage.getItem(STORAGE_KEY) === 'true';
-  });
-
-  useEffect(() => {
-    if (isAdmin) {
-      window.localStorage.setItem(STORAGE_KEY, 'true');
-    } else {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
-  }, [isAdmin]);
+  const { role, revoke: revokePassword } = usePassword();
+  const isAdmin = role === 'admin';
 
   const authorize = useCallback(() => {
-    setIsAdmin(true);
+    // Authorization is now handled by PasswordContext
+    // This function is kept for backward compatibility
   }, []);
 
   const revoke = useCallback(() => {
-    setIsAdmin(false);
-  }, []);
+    revokePassword();
+  }, [revokePassword]);
 
   const value = useMemo(() => ({
     isAdmin,

@@ -38,6 +38,7 @@ const parseClassPayload = (payload = {}, options = {}) => {
     quality,
     className,
     classNameArabic,
+    classNameEnglish,
     classFeatures,
     classPrice,
     classWeight,
@@ -73,6 +74,9 @@ const parseClassPayload = (payload = {}, options = {}) => {
     classNameArabic: classNameArabic !== undefined && classNameArabic !== null
       ? String(classNameArabic).trim()
       : classNameArabic,
+    classNameEnglish: classNameEnglish !== undefined && classNameEnglish !== null
+      ? String(classNameEnglish).trim()
+      : classNameEnglish,
     classFeatures: classFeatures !== undefined && classFeatures !== null
       ? String(classFeatures).trim()
       : classFeatures,

@@ -5,6 +5,7 @@ export interface ClassRecord {
   quality: string;
   className: string;
   classNameArabic: string | null;
+  classNameEnglish: string | null;
   classFeatures: string | null;
   classPrice: number | null;
   classWeight: number | null;
@@ -31,6 +32,7 @@ export type ColumnKey =
   | 'quality'
   | 'className'
   | 'classNameArabic'
+  | 'classNameEnglish'
   | 'classFeatures'
   | 'classWeight'
   | 'classPrice'

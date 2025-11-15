@@ -6,6 +6,7 @@ import App from './App';
 import './index.css';
 import { AdminAccessProvider } from './context/AdminAccessContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { PasswordProvider } from './context/PasswordContext';
 
 const queryClient = new QueryClient();
 
@@ -20,9 +21,11 @@ ReactDOM.createRoot(rootElement).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <LanguageProvider>
-          <AdminAccessProvider>
-            <App />
-          </AdminAccessProvider>
+          <PasswordProvider>
+            <AdminAccessProvider>
+              <App />
+            </AdminAccessProvider>
+          </PasswordProvider>
         </LanguageProvider>
       </BrowserRouter>
     </QueryClientProvider>

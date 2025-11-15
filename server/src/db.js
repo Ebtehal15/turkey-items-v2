@@ -28,6 +28,7 @@ const initializeDatabase = () => {
         quality TEXT NOT NULL,
         class_name TEXT NOT NULL,
         class_name_ar TEXT,
+        class_name_en TEXT,
         class_features TEXT,
         class_price REAL,
         class_weight REAL,
@@ -57,6 +58,9 @@ const initializeDatabase = () => {
       }
       if (!columnNames.includes('class_name_ar')) {
         db.run('ALTER TABLE classes ADD COLUMN class_name_ar TEXT');
+      }
+      if (!columnNames.includes('class_name_en')) {
+        db.run('ALTER TABLE classes ADD COLUMN class_name_en TEXT');
       }
     });
 

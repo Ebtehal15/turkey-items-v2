@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useClasses } from '../hooks/useClasses';
@@ -32,11 +32,36 @@ const resolveVideoSrc = (value?: string | null) => {
 
 type ViewMode = 'table' | 'cards';
 
+const getInitialViewMode = (): ViewMode => {
+  if (typeof window === 'undefined') {
+    return 'table';
+  }
+  // Mobil cihazlar için card görünümü, masaüstü için table görünümü
+  return window.innerWidth <= 768 ? 'cards' : 'table';
+};
+
 const UserPanel = () => {
   const [filters, setFilters] = useState<ClassFilters>({});
-  const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode);
+  const [userHasSelected, setUserHasSelected] = useState(false);
   const { data: classes = [], isLoading, error } = useClasses(filters);
   const { language, t } = useTranslate();
+
+  // Ekran boyutu değiştiğinde görünümü otomatik güncelle (sadece kullanıcı manuel seçim yapmadıysa)
+  useEffect(() => {
+    if (userHasSelected) {
+      return;
+    }
+
+    const handleResize = () => {
+      const isMobile = window.innerWidth <= 768;
+      const newViewMode: ViewMode = isMobile ? 'cards' : 'table';
+      setViewMode(newViewMode);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [userHasSelected]);
 
   const formatNumber = (value: number | null | undefined, suffix = '') => {
     if (value === null || value === undefined) {
@@ -83,11 +108,17 @@ const UserPanel = () => {
       case 'quality':
         return item.quality;
       case 'className':
-        return language === 'ar' && item.classNameArabic
-          ? item.classNameArabic
-          : item.className;
+        if (language === 'ar' && item.classNameArabic) {
+          return item.classNameArabic;
+        }
+        if (language === 'en' && item.classNameEnglish) {
+          return item.classNameEnglish;
+        }
+        return item.className;
       case 'classNameArabic':
         return item.classNameArabic || '—';
+      case 'classNameEnglish':
+        return item.classNameEnglish || '—';
       case 'classFeatures':
         return item.classFeatures || t('No features provided yet.', 'لم يتم إضافة المزايا بعد.', 'Aún no se han añadido características.');
       case 'classWeight':
@@ -101,7 +132,11 @@ const UserPanel = () => {
         return (
           <VideoPreview
             src={resolveVideoSrc(item.classVideo)}
-            title={language === 'ar' && item.classNameArabic ? item.classNameArabic : item.className}
+            title={(() => {
+              if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
+              if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
+              return item.className;
+            })()}
             variant="icon"
           />
         );
@@ -183,7 +218,10 @@ const UserPanel = () => {
               type="button"
               className={viewMode === 'table' ? 'active' : ''}
               aria-pressed={viewMode === 'table'}
-              onClick={() => setViewMode('table')}
+              onClick={() => {
+                setViewMode('table');
+                setUserHasSelected(true);
+              }}
             >
               {t('Table', 'جدول', 'Tabla')}
             </button>
@@ -191,7 +229,10 @@ const UserPanel = () => {
               type="button"
               className={viewMode === 'cards' ? 'active' : ''}
               aria-pressed={viewMode === 'cards'}
-              onClick={() => setViewMode('cards')}
+              onClick={() => {
+                setViewMode('cards');
+                setUserHasSelected(true);
+              }}
             >
               {t('Cards', 'بطاقات', 'Tarjetas')}
             </button>
@@ -229,9 +270,7 @@ const UserPanel = () => {
                     )}
                     {columnVisibility.className && (
                       <h3>
-                        {language === 'ar' && item.classNameArabic
-                          ? item.classNameArabic
-                          : (renderCell(item, 'className') as React.ReactNode)}
+                        {renderCell(item, 'className') as React.ReactNode}
                       </h3>
                     )}
                     {columnVisibility.quality && (
@@ -271,9 +310,11 @@ const UserPanel = () => {
                   {columnVisibility.classVideo && (
                     <VideoPreview
                       src={resolveVideoSrc(item.classVideo)}
-                      title={language === 'ar' && item.classNameArabic
-                        ? item.classNameArabic
-                        : item.className}
+                      title={(() => {
+                        if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
+                        if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
+                        return item.className;
+                      })()}
                       variant="icon"
                     />
                   )}

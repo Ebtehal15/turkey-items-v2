@@ -467,6 +467,40 @@ button.danger {
   border-radius: 16px;
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-stat::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.1));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.admin-stat:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.25);
+}
+
+.admin-stat:hover::before {
+  opacity: 1;
+}
+
+.admin-stat--active {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.admin-stat--active::before {
+  opacity: 1;
 }
 
 .admin-stat span {
@@ -486,28 +520,55 @@ button.danger {
 .admin-stat--warning {
   background: linear-gradient(135deg, #f97316, #ef4444);
   box-shadow: 0 12px 24px rgba(239, 68, 68, 0.3);
+  cursor: pointer;
+}
+
+.admin-stat--warning:hover {
+  box-shadow: 0 16px 32px rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, #fb923c, #f87171);
+}
+
+.admin-stat--warning.admin-stat--active {
+  box-shadow: 0 16px 32px rgba(239, 68, 68, 0.45);
+  background: linear-gradient(135deg, #fb923c, #f87171);
 }
 
 .admin-stats__missing {
-  background: rgba(15, 23, 42, 0.04);
-  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.98));
+  border-radius: 16px;
   padding: 1.2rem 1.4rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.1);
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .admin-stats__toggle {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
+  padding: 0.85rem 1.1rem;
+  border-radius: 12px;
   border: 1px solid rgba(15, 23, 42, 0.1);
-  background: #fff;
+  background: linear-gradient(135deg, #ffffff, #f8fafc);
   font-weight: 600;
   color: #182248;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+  transition: all 0.2s ease;
 }
 
 .admin-stats__missing ul {
@@ -521,11 +582,28 @@ button.danger {
 .admin-stats__missing li {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 0.75rem;
-  padding: 0.6rem 0.8rem;
+  padding: 0.75rem 1rem;
   border-radius: 10px;
   background: #fff;
-  border: 1px solid rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-stats__missing li:hover {
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border-color: rgba(99, 102, 241, 0.3);
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+}
+
+.admin-stats__missing li:active {
+  transform: translateX(2px);
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.2);
 }
 
 .admin-stats__missing-name {
@@ -554,9 +632,19 @@ button.danger {
 }
 
 .admin-stats__missing-panel {
-  max-height: 320px;
+  max-height: 400px;
   overflow-y: auto;
   padding-right: 0.4rem;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .admin-stats__missing-panel::-webkit-scrollbar {
@@ -891,7 +979,8 @@ button.danger {
   font-size: 0.9rem;
 }
 
-.admin-gate {
+.admin-gate,
+.password-gate {
   align-items: center;
   justify-content: center;
   min-height: 60vh;
