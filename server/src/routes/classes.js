@@ -476,11 +476,6 @@ router.post(
           try {
             const parsed = parseClassPayload(record, { classVideo: record.classVideo || null });
 
-            if (!parsed.className) {
-              skipped.push({ index: index + 2, reason: 'Class name is required.' });
-              return;
-            }
-
             if (!parsed.specialId) {
               skipped.push({ index: index + 2, reason: 'Special ID is required.' });
               return;
@@ -493,7 +488,7 @@ router.post(
             pendingOperations += 1;
 
             // Check if record exists
-            db.get('SELECT id FROM classes WHERE special_id = ?', [specialIdValue], (getErr, existing) => {
+            db.get('SELECT id, class_name FROM classes WHERE special_id = ?', [specialIdValue], (getErr, existing) => {
               if (getErr) {
                 skipped.push({ index: index + 2, reason: `Database error: ${getErr.message}` });
                 pendingOperations -= 1;
@@ -530,12 +525,16 @@ router.post(
                 }
               };
 
+              const classNameValue = parsed.className && parsed.className.length
+                ? parsed.className
+                : (existing?.class_name ?? '');
+
               if (existing) {
                 // Update existing record
                 updateStmt.run(
                   parsed.mainCategory ?? '',
                   parsed.quality ?? '',
-                  parsed.className,
+                  classNameValue,
                   parsed.classNameArabic || null,
                   parsed.classNameEnglish || null,
                   parsed.classFeatures || null,
@@ -567,7 +566,7 @@ router.post(
                     specialIdValue,
                     parsed.mainCategory ?? '',
                     parsed.quality ?? '',
-                    parsed.className,
+                    classNameValue,
                     parsed.classNameArabic || null,
                     parsed.classNameEnglish || null,
                     parsed.classFeatures || null,

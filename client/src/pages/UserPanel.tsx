@@ -262,61 +262,65 @@ const UserPanel = () => {
             <div className="catalog-card-grid">
               {classes.map((item) => (
                 <article key={item.id} className="catalog-card">
-                  <header className="catalog-card__header">
-                    {columnVisibility.specialId && (
-                      <span className="catalog-card__id">
-                        {renderCell(item, 'specialId')}
-                      </span>
-                    )}
-                    {columnVisibility.className && (
-                      <h3>
-                        {renderCell(item, 'className') as React.ReactNode}
-                      </h3>
-                    )}
-                    {columnVisibility.quality && (
-                      <p>{renderCell(item, 'quality')}</p>
-                    )}
-                  </header>
-                  <dl>
-                    {columnVisibility.mainCategory && (
-                      <div>
-                        <dt>{t('Main Category', 'الفئة الرئيسية', 'Categoría Principal')}</dt>
-                        <dd>{renderCell(item, 'mainCategory')}</dd>
-                      </div>
-                    )}
-                    {columnVisibility.classFeatures && (
-                      <div>
-                        <dt>{t('Features', 'المميزات', 'Características')}</dt>
-                        <dd>{renderCell(item, 'classFeatures')}</dd>
-                      </div>
-                    )}
-                    {columnVisibility.classWeight && (
-                      <div>
-                        <dt>{t('Weight', 'الوزن', 'Peso')}</dt>
-                        <dd>{formatNumber(item.classWeight, 'kg')}</dd>
-                      </div>
-                    )}
-                    {columnVisibility.classPrice && (
-                      <div>
-                        <dt>{t('Price', 'السعر', 'Precio')}</dt>
-                        <dd>
-                          {item.classPrice !== null && item.classPrice !== undefined
-                            ? `$${formatNumber(item.classPrice)}`
-                            : t('Price on request', 'السعر عند الطلب', 'Precio a solicitud')}
-                        </dd>
-                      </div>
-                    )}
-                  </dl>
+                  <div className="catalog-card__content">
+                    <header className="catalog-card__header">
+                      {columnVisibility.specialId && (
+                        <span className="catalog-card__id">
+                          {renderCell(item, 'specialId')}
+                        </span>
+                      )}
+                      {columnVisibility.className && (
+                        <h3>
+                          {renderCell(item, 'className') as React.ReactNode}
+                        </h3>
+                      )}
+                      {columnVisibility.quality && (
+                        <p>{renderCell(item, 'quality')}</p>
+                      )}
+                    </header>
+                    <dl>
+                      {columnVisibility.mainCategory && (
+                        <div>
+                          <dt>{t('Main Category', 'الفئة الرئيسية', 'Categoría Principal')}</dt>
+                          <dd>{renderCell(item, 'mainCategory')}</dd>
+                        </div>
+                      )}
+                      {columnVisibility.classFeatures && (
+                        <div>
+                          <dt>{t('Features', 'المميزات', 'Características')}</dt>
+                          <dd>{renderCell(item, 'classFeatures')}</dd>
+                        </div>
+                      )}
+                      {columnVisibility.classWeight && (
+                        <div>
+                          <dt>{t('Weight', 'الوزن', 'Peso')}</dt>
+                          <dd>{formatNumber(item.classWeight, 'kg')}</dd>
+                        </div>
+                      )}
+                      {columnVisibility.classPrice && (
+                        <div>
+                          <dt>{t('Price', 'السعر', 'Precio')}</dt>
+                          <dd>
+                            {item.classPrice !== null && item.classPrice !== undefined
+                              ? `$${formatNumber(item.classPrice)}`
+                              : t('Price on request', 'السعر عند الطلب', 'Precio a solicitud')}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  </div>
                   {columnVisibility.classVideo && (
-                    <VideoPreview
-                      src={resolveVideoSrc(item.classVideo)}
-                      title={(() => {
-                        if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
-                        if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
-                        return item.className;
-                      })()}
-                      variant="card"
-                    />
+                    <div className="catalog-card__video-wrapper">
+                      <VideoPreview
+                        src={resolveVideoSrc(item.classVideo)}
+                        title={(() => {
+                          if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
+                          if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
+                          return item.className;
+                        })()}
+                        variant="card"
+                      />
+                    </div>
                   )}
                 </article>
               ))}
