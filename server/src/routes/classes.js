@@ -493,7 +493,7 @@ router.post(
             pendingOperations += 1;
 
             // Check if record exists
-            db.get('SELECT id, class_name FROM classes WHERE special_id = ?', [specialIdValue], (getErr, existing) => {
+            db.get('SELECT id, class_name, class_video FROM classes WHERE special_id = ?', [specialIdValue], (getErr, existing) => {
               if (getErr) {
                 skipped.push({ index: index + 2, reason: `Database error: ${getErr.message}` });
                 pendingOperations -= 1;
@@ -534,6 +534,11 @@ router.post(
                 ? parsed.className
                 : (existing?.class_name ?? '');
 
+              // Preserve existing video if Excel doesn't provide a new one
+              const videoValue = (parsed.classVideo && parsed.classVideo.trim().length > 0)
+                ? parsed.classVideo
+                : (existing?.class_video ?? null);
+
               if (existing) {
                 // Update existing record
                 updateStmt.run(
@@ -545,7 +550,7 @@ router.post(
                   parsed.classFeatures || null,
                   priceValue,
                   weightValue,
-                  parsed.classVideo || null,
+                  videoValue,
                   specialIdValue,
                   operationCallback
                 );
