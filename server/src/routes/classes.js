@@ -67,15 +67,20 @@ const mapRowToResponse = (row) => ({
 });
 
 router.get('/', (req, res) => {
-  const { search, category, quality } = req.query;
+  const { classNameSearch, codeSearch, category, quality } = req.query;
 
   const filters = [];
   const params = [];
 
-  if (search) {
-    filters.push('(LOWER(special_id) LIKE ? OR LOWER(class_name) LIKE ? OR LOWER(IFNULL(class_name_ar, "")) LIKE ? OR LOWER(IFNULL(class_name_en, "")) LIKE ?)');
-    const term = `%${search.toLowerCase()}%`;
-    params.push(term, term, term, term);
+  if (codeSearch) {
+    filters.push('LOWER(special_id) LIKE ?');
+    params.push(`%${codeSearch.toLowerCase()}%`);
+  }
+
+  if (classNameSearch) {
+    filters.push('(LOWER(class_name) LIKE ? OR LOWER(IFNULL(class_name_ar, "")) LIKE ? OR LOWER(IFNULL(class_name_en, "")) LIKE ?)');
+    const term = `%${classNameSearch.toLowerCase()}%`;
+    params.push(term, term, term);
   }
 
   if (category) {

@@ -166,13 +166,24 @@ const UserPanel = () => {
         </div>
         <div className="catalog-filters__grid">
           <label>
-            {t('Search', 'بحث', 'Buscar')}
+            {t('Class Name', 'اسم الصنف', 'Nombre del producto')}
             <input
               type="search"
-              name="search"
-              value={filters.search ?? ''}
+              name="classNameSearch"
+              value={filters.classNameSearch ?? ''}
               onChange={handleFilterChange}
-              placeholder={t('Search by ID or class name', 'ابحث بالرمز أو اسم الصنف', 'Buscar por ID o nombre del producto')}
+              placeholder={t('Search by class name', 'ابحث باسم الصنف', 'Buscar por nombre del producto')}
+            />
+          </label>
+
+          <label>
+            {t('Code', 'الرمز', 'Código')}
+            <input
+              type="search"
+              name="codeSearch"
+              value={filters.codeSearch ?? ''}
+              onChange={handleFilterChange}
+              placeholder={t('Search by code', 'ابحث بالرمز', 'Buscar por código')}
             />
           </label>
 

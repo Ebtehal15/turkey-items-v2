@@ -21,7 +21,8 @@ export interface BulkUploadResult {
 }
 
 export interface ClassFilters {
-  search?: string;
+  classNameSearch?: string;
+  codeSearch?: string;
   category?: string;
   quality?: string;
 }
