@@ -42,6 +42,7 @@ const parseClassPayload = (payload = {}, options = {}) => {
     classFeatures,
     classPrice,
     classWeight,
+    classQuantity,
     specialId,
     classVideoUrl,
   } = payload;
@@ -57,8 +58,20 @@ const parseClassPayload = (payload = {}, options = {}) => {
     return parsed;
   };
 
+  const parseInteger = (value) => {
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) {
+      throw new Error('Invalid numeric value.');
+    }
+    return parsed;
+  };
+
   const parsedPrice = parseNumber(classPrice);
   const parsedWeight = parseNumber(classWeight);
+  const parsedQuantity = parseInteger(classQuantity);
 
   const trimmedSpecialId = specialId ? String(specialId).trim().toUpperCase() : undefined;
   let normalizedVideoUrl;
@@ -82,6 +95,7 @@ const parseClassPayload = (payload = {}, options = {}) => {
       : classFeatures,
     classPrice: parsedPrice,
     classWeight: parsedWeight,
+    classQuantity: parsedQuantity,
     specialId: trimmedSpecialId,
     classVideoUrl: normalizedVideoUrl,
     ...options,

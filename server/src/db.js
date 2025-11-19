@@ -62,6 +62,9 @@ const initializeDatabase = () => {
       if (!columnNames.includes('class_name_en')) {
         db.run('ALTER TABLE classes ADD COLUMN class_name_en TEXT');
       }
+      if (!columnNames.includes('class_quantity')) {
+        db.run('ALTER TABLE classes ADD COLUMN class_quantity INTEGER');
+      }
     });
 
     db.run(`

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logo Color Extractor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        #logo {
+            max-width: 300px;
+            border: 2px solid #ddd;
+            margin: 20px 0;
+        }
+        #colors {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .color-item {
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .color-value {
+            font-family: monospace;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #1e40af;
+        }
+    </style>
+</head>
+<body>
+    <h1>Logo Color Extractor</h1>
+    <p>Upload your logo image to extract the dominant colors:</p>
+    <input type="file" id="fileInput" accept="image/*">
+    <br><br>
+    <img id="logo" style="display:none;">
+    <canvas id="canvas" style="display:none;"></canvas>
+    <div id="colors"></div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const logo = document.getElementById('logo');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colorsDiv = document.getElementById('colors');
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    logo.src = event.target.result;
+                    logo.style.display = 'block';
+                    logo.onload = extractColors;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function extractColors() {
+            canvas.width = logo.width;
+            canvas.height = logo.height;
+            ctx.drawImage(logo, 0, 0);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const colorMap = {};
+
+            // Sample colors (every 20th pixel for performance)
+            for (let i = 0; i < data.length; i += 80) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const a = data[i + 3];
+
+                // Skip transparent or very light pixels
+                if (a < 128) continue;
+
+                // Round to reduce color variations (group similar colors)
+                const key = Math.floor(r/15)*15 + ',' + Math.floor(g/15)*15 + ',' + Math.floor(b/15)*15;
+                colorMap[key] = (colorMap[key] || 0) + 1;
+            }
+
+            // Get top 8 colors
+            const sorted = Object.entries(colorMap)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8);
+
+            colorsDiv.innerHTML = '<h2>Top Colors (copy these to your CSS variables):</h2>';
+            sorted.forEach(([rgb, count], index) => {
+                const [r, g, b] = rgb.split(',').map(Number);
+                const hex = '#' + [r, g, b].map(x => {
+                    const hex = x.toString(16);
+                    return hex.length === 1 ? '0' + hex : hex;
+                }).join('');
+
+                // Determine text color based on brightness
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                const textColor = brightness > 128 ? '#000' : '#fff';
+
+                const colorItem = document.createElement('div');
+                colorItem.className = 'color-item';
+                colorItem.style.backgroundColor = hex;
+                colorItem.style.color = textColor;
+                colorItem.innerHTML = `
+                    <div style="font-size: 14px; margin-bottom: 5px;">Color ${index + 1}</div>
+                    <div class="color-value">${hex}</div>
+                    <div style="font-size: 12px; margin-top: 5px;">RGB: ${r}, ${g}, ${b}</div>
+                    <div style="font-size: 11px; margin-top: 3px; opacity: 0.8;">Count: ${count}</div>
+                `;
+                colorsDiv.appendChild(colorItem);
+            });
+
+            // Show CSS variable suggestions
+            if (sorted.length >= 2) {
+                const primary = sorted[0][0].split(',').map(Number);
+                const secondary = sorted[1][0].split(',').map(Number);
+                const accent = sorted.length >= 3 ? sorted[2][0].split(',').map(Number) : secondary;
+
+                const toHex = (rgb) => '#' + rgb.map(x => {
+                    const hex = x.toString(16);
+                    return hex.length === 1 ? '0' + hex : hex;
+                }).join('');
+
+                const cssVars = `
+                    <div style="margin-top: 30px; padding: 20px; background: #f5f5f5; border-radius: 8px;">
+                        <h3>Suggested CSS Variables:</h3>
+                        <pre style="background: white; padding: 15px; border-radius: 5px; overflow-x: auto;">
+--color-primary: ${toHex(primary)};        /* Main brand color */
+--color-primary-dark: ${toHex(primary.map(c => Math.max(0, c - 40)))};   /* Darker shade */
+--color-primary-light: ${toHex(primary.map(c => Math.min(255, c + 40)))};  /* Lighter shade */
+--color-secondary: ${toHex(secondary)};      /* Secondary brand color */
+--color-accent: ${toHex(accent)};         /* Accent color */
+                        </pre>
+                        <p style="font-size: 14px; color: #666;">Copy these values to the :root section in your index.css file</p>
+                    </div>
+                `;
+                colorsDiv.insertAdjacentHTML('beforeend', cssVars);
+            }
+        }
+    </script>
+</body>
+</html>
+
+

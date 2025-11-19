@@ -61,16 +61,22 @@ const mapRowToResponse = (row) => ({
   classFeatures: row.class_features,
   classPrice: row.class_price,
   classWeight: row.class_weight,
+  classQuantity: row.class_quantity,
   classVideo: row.class_video,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
 
 router.get('/', (req, res) => {
-  const { classNameSearch, codeSearch, category, quality } = req.query;
+  const { classNameSearch, codeSearch, category, quality, includeZeroQuantity } = req.query;
 
   const filters = [];
   const params = [];
+
+  // Hide products with quantity = 0 from catalog (unless includeZeroQuantity is true for admin)
+  if (includeZeroQuantity !== 'true') {
+    filters.push('(class_quantity IS NULL OR class_quantity != 0)');
+  }
 
   if (codeSearch) {
     filters.push('LOWER(special_id) LIKE ?');
@@ -149,11 +155,6 @@ router.post(
       const payload = parseClassPayload(req.body);
       const { classVideoUrl } = payload;
 
-      if (!payload.className) {
-        res.status(400).json({ message: 'Class name is required.' });
-        return;
-      }
-
       let specialId = payload.specialId;
       if (!specialId) {
         specialId = await getNextSpecialId();
@@ -174,20 +175,22 @@ router.post(
           class_features,
           class_price,
           class_weight,
+          class_quantity,
           class_video
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
         specialId,
         payload.mainCategory ?? '',
         payload.quality ?? '',
-        payload.className,
+        payload.className || '',
         payload.classNameArabic || null,
         payload.classNameEnglish || null,
         payload.classFeatures || null,
         payload.classPrice,
         payload.classWeight,
+        payload.classQuantity,
         videoPath,
         function insertCallback(err) {
           if (err) {
@@ -266,6 +269,7 @@ router.put(
               class_features = ?,
               class_price = ?,
               class_weight = ?,
+              class_quantity = ?,
               class_video = ?,
               updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
@@ -283,6 +287,7 @@ router.put(
           payload.classFeatures !== undefined ? payload.classFeatures : current.class_features,
           payload.classPrice !== undefined ? payload.classPrice : current.class_price,
           payload.classWeight !== undefined ? payload.classWeight : current.class_weight,
+          payload.classQuantity !== undefined ? payload.classQuantity : current.class_quantity,
           videoPath,
           id,
           (updateErr) => {
@@ -427,8 +432,9 @@ router.post(
           class_features,
           class_price,
           class_weight,
+          class_quantity,
           class_video
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const updateStmt = db.prepare(`
@@ -441,6 +447,7 @@ router.post(
             class_features = ?,
             class_price = ?,
             class_weight = ?,
+            class_quantity = ?,
             class_video = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE special_id = ?
@@ -475,6 +482,7 @@ router.post(
             classFeatures: row['Class Features'] || row['class_features'],
             classPrice: row['Class Price'] || row['class_price'],
             classWeight: row['Class KG'] || row['class_weight'] || row['Class Weight'],
+            classQuantity: row['Class Quantity'] || row['class_quantity'] || row['Quantity'] || row['quantity'],
             classVideo: row['Class Video'] || row['class_video'],
           };
 
@@ -488,6 +496,7 @@ router.post(
 
             const priceValue = parsed.classPrice;
             const weightValue = parsed.classWeight;
+            const quantityValue = parsed.classQuantity;
             const specialIdValue = parsed.specialId;
 
             pendingOperations += 1;
@@ -550,6 +559,7 @@ router.post(
                   parsed.classFeatures || null,
                   priceValue,
                   weightValue,
+                  quantityValue,
                   videoValue,
                   specialIdValue,
                   operationCallback
@@ -582,6 +592,7 @@ router.post(
                     parsed.classFeatures || null,
                     priceValue,
                     weightValue,
+                    quantityValue,
                     parsed.classVideo || null,
                     operationCallback
                   );

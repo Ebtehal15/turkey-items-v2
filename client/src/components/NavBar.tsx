@@ -9,7 +9,7 @@ const NavBar = () => {
   const { language, t, setLanguage } = useTranslate();
 
   const labels = {
-    brand: t('Product Catalog', 'كتالوج المنتجات', 'Catálogo de Productos'),
+    brand: t('AJ International Group', 'AJ International Group', 'AJ International Group'),
     catalog: t('Catalog', 'الكتالوج', 'Catálogo'),
     admin: t('Admin', 'الإدارة', 'Administración'),
   };
