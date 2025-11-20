@@ -10,7 +10,7 @@ const NavBar = () => {
 
   const labels = {
     brand: t('AJ International Group', 'AJ International Group', 'AJ International Group'),
-    catalog: t('Catalog', 'الكتالوج', 'Catálogo'),
+    catalog: t('Product Catalog', 'كتالوج المنتجات', 'Catálogo'),
     admin: t('Admin', 'الإدارة', 'Administración'),
   };
 
