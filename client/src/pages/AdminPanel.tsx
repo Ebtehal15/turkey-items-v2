@@ -24,7 +24,8 @@ import {
 import { fetchColumnVisibility, updateColumnVisibility } from '../api/settings';
 import useTranslate from '../hooks/useTranslate';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 
+  (import.meta.env.PROD ? 'https://cillii.onrender.com' : 'http://localhost:4000');
 
 const joinBaseUrl = (base: string, path: string) => {
   const normalizedBase = base.replace(/\/$/, '');

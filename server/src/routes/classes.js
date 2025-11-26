@@ -104,7 +104,14 @@ router.get('/', (req, res) => {
   const query = `
     SELECT * FROM classes
     ${whereClause}
-    ORDER BY main_category ASC, quality ASC, class_name ASC
+    ORDER BY 
+      CASE 
+        WHEN class_video IS NOT NULL AND class_video != '' THEN 0 
+        ELSE 1 
+      END ASC,
+      main_category ASC, 
+      quality ASC, 
+      class_name ASC
   `;
 
   db.all(query, params, (err, rows) => {

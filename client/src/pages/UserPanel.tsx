@@ -13,7 +13,8 @@ import {
 import useTranslate from '../hooks/useTranslate';
 import { useCart } from '../context/CartContext';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 
+  (import.meta.env.PROD ? 'https://cillii.onrender.com' : 'http://localhost:4000');
 
 const joinBaseUrl = (base: string, path: string) => {
   const normalizedBase = base.replace(/\/$/, '');
