@@ -105,13 +105,16 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-export const useCart = (): CartContextValue => {
+// Custom hook for cart functionality  
+function useCart(): CartContextValue {
   const context = useContext(CartContext);
   if (!context) {
     throw new Error('useCart must be used within a CartProvider');
   }
   return context;
-};
+}
+
+export { useCart };
 
 
 
