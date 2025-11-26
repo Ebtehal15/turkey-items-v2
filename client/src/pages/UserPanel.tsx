@@ -11,6 +11,7 @@ import {
   orderedColumns,
 } from '../constants/columns';
 import useTranslate from '../hooks/useTranslate';
+import { useCart } from '../context/CartContext';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
 
@@ -40,27 +41,61 @@ const getInitialViewMode = (): ViewMode => {
   return window.innerWidth <= 768 ? 'cards' : 'table';
 };
 
+const CartIconGlyph = () => (
+  <svg
+    className="cart-icon-trigger__icon"
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <path
+      d="M3 4h2l2.4 9.2a2 2 0 001.94 1.5h8.27a2 2 0 001.94-1.5L21 6H6"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="9" cy="19" r="1.4" stroke="currentColor" strokeWidth="1.2" />
+    <circle cx="18" cy="19" r="1.4" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+);
+
+const isBrowser = typeof window !== 'undefined';
+
 const UserPanel = () => {
   const [filters, setFilters] = useState<ClassFilters>({});
   const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode);
   const [userHasSelected, setUserHasSelected] = useState(false);
+  const [expandedControls, setExpandedControls] = useState<Record<number, boolean>>({});
+  const [isMobileView, setIsMobileView] = useState<boolean>(() => (isBrowser ? window.innerWidth <= 600 : false));
   const { data: allClasses = [] } = useClasses();
   const { data: classes = [], isLoading, error } = useClasses(filters);
   const { language, t } = useTranslate();
+  const {
+    addItem,
+    items: cartItems,
+    removeItem,
+    updateQuantity,
+  } = useCart();
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Ekran boyutu değiştiğinde görünümü otomatik güncelle (sadece kullanıcı manuel seçim yapmadıysa)
+  // Ekran boyutu değiştiğinde mobil durumunu ve varsayılan görünümü güncelle
   useEffect(() => {
-    if (userHasSelected) {
-      return;
-    }
-
     const handleResize = () => {
-      const isMobile = window.innerWidth <= 768;
-      const newViewMode: ViewMode = isMobile ? 'cards' : 'table';
-      setViewMode(newViewMode);
+      const isMobile = window.innerWidth <= 600;
+      setIsMobileView(isMobile);
+
+      if (!userHasSelected) {
+        const newViewMode: ViewMode = window.innerWidth <= 768 ? 'cards' : 'table';
+        setViewMode(newViewMode);
+      }
     };
 
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [userHasSelected]);
@@ -79,6 +114,52 @@ const UserPanel = () => {
     () => buildColumnLabels(language),
     [language],
   );
+
+  const getCartQuantity = (classId: number) => {
+    const match = cartItems.find((cartItem) => cartItem.record.id === classId);
+    return match ? match.quantity : 0;
+  };
+
+  const openControlFor = (classId: number) => {
+    setExpandedControls((prev) => ({
+      ...prev,
+      [classId]: true,
+    }));
+  };
+
+  const collapseControlIfEmpty = (classId: number, nextQty: number) => {
+    if (nextQty > 0) {
+      return;
+    }
+    setExpandedControls((prev) => {
+      if (!prev[classId]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[classId];
+      return next;
+    });
+  };
+
+  const handleIncrease = async (record: ClassRecord) => {
+    await addItem(record);
+    openControlFor(record.id);
+  };
+
+  const handleDecrease = async (record: ClassRecord) => {
+    const currentQty = getCartQuantity(record.id);
+    if (currentQty <= 0) {
+      return;
+    }
+    if (currentQty === 1) {
+      await removeItem(record.id);
+      collapseControlIfEmpty(record.id, 0);
+      return;
+    }
+    const nextQty = currentQty - 1;
+    await updateQuantity(record.id, nextQty);
+    collapseControlIfEmpty(record.id, nextQty);
+  };
 
   const groups = useMemo<string[]>(() => {
     const set = new Set<string>();
@@ -100,6 +181,19 @@ const UserPanel = () => {
     () => orderedColumns.filter((key) => columnVisibility[key]),
     [columnVisibility],
   );
+
+  // Cart sütununu specialId'den sonra eklemek için sütunları yeniden düzenle
+  const tableColumns = useMemo<(ColumnKey | 'cart')[]>(() => {
+    const specialIdIndex = visibleColumnKeys.indexOf('specialId');
+    if (specialIdIndex >= 0) {
+      // specialId'den sonra cart'ı ekle
+      const beforeCart = visibleColumnKeys.slice(0, specialIdIndex + 1);
+      const afterCart = visibleColumnKeys.slice(specialIdIndex + 1);
+      return [...beforeCart, 'cart', ...afterCart];
+    }
+    // specialId görünür değilse, cart'ı başa ekle
+    return ['cart', ...visibleColumnKeys];
+  }, [visibleColumnKeys]);
 
   const renderCell = (item: ClassRecord, key: ColumnKey): ReactNode => {
     switch (key) {
@@ -285,17 +379,72 @@ const UserPanel = () => {
               <table>
                 <thead>
                   <tr>
-                    {visibleColumnKeys.map((key) => (
-                      <th key={key}>{columnLabels[key]}</th>
-                    ))}
+                    {tableColumns.map((key) => {
+                      if (key === 'cart') {
+                        return (
+                          <th key="cart" className="cart-column">
+                            {t('Cart', 'السلة', 'Carrito')}
+                          </th>
+                        );
+                      }
+                      return <th key={key}>{columnLabels[key]}</th>;
+                    })}
                   </tr>
                 </thead>
                 <tbody>
                   {classes.map((item: ClassRecord) => (
                     <tr key={item.id}>
-                      {visibleColumnKeys.map((key) => (
-                        <td key={key}>{renderCell(item, key)}</td>
-                      ))}
+                      {tableColumns.map((key) => {
+                        if (key === 'cart') {
+                          return (
+                            <td key="cart" className={`cart-column ${isMobileView ? 'cart-column--mobile' : ''}`}>
+                        {(() => {
+                          const quantity = getCartQuantity(item.id);
+                          const isExpanded = quantity > 0 || expandedControls[item.id];
+                          if (!isExpanded) {
+                            return (
+                              <button
+                                type="button"
+                                className="cart-icon-trigger"
+                                onClick={async () => {
+                                  await handleIncrease(item);
+                                }}
+                                aria-label={t('Add to cart', 'أضف إلى السلة', 'Añadir al carrito')}
+                              >
+                                <CartIconGlyph />
+                              </button>
+                            );
+                          }
+                          return (
+                            <div className="table-cart-control">
+                              <button
+                                type="button"
+                                className="table-cart-btn table-cart-btn--minus"
+                                onClick={async () => { await handleDecrease(item); }}
+                                aria-label={t('Decrease quantity', 'تقليل الكمية', 'Disminuir cantidad')}
+                                disabled={quantity === 0}
+                              >
+                                −
+                              </button>
+                              <span className="table-cart-value">
+                                {quantity === 0 ? t('Add', 'إضافة', 'Agregar') : quantity}
+                              </span>
+                              <button
+                                type="button"
+                                className="table-cart-btn table-cart-btn--plus"
+                                onClick={async () => { await handleIncrease(item); }}
+                                aria-label={t('Increase quantity', 'زيادة الكمية', 'Aumentar cantidad')}
+                              >
+                                +
+                              </button>
+                            </div>
+                          );
+                        })()}
+                      </td>
+                          );
+                        }
+                        return <td key={key}>{renderCell(item, key)}</td>;
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -367,6 +516,53 @@ const UserPanel = () => {
                       />
                     </div>
                   )}
+                  <div className="catalog-card__actions">
+                    {(() => {
+                      const quantity = getCartQuantity(item.id);
+                      const isExpanded = quantity > 0 || expandedControls[item.id];
+                      if (!isExpanded) {
+                        return (
+                          <button
+                            type="button"
+                            className="cart-icon-trigger cart-icon-trigger--card"
+                            onClick={async () => {
+                              await handleIncrease(item);
+                            }}
+                            aria-label={t('Add to cart', 'أضف إلى السلة', 'Añadir al carrito')}
+                          >
+                            <CartIconGlyph />
+                            <span>{t('Add', 'إضافة', 'Agregar')}</span>
+                          </button>
+                        );
+                      }
+                      return (
+                        <div className="card-cart-control">
+                          <button
+                            type="button"
+                            className="card-cart-btn card-cart-btn--minus"
+                            onClick={async () => { await handleDecrease(item); }}
+                            aria-label={t('Decrease quantity', 'تقليل الكمية', 'Disminuir cantidad')}
+                            disabled={quantity === 0}
+                          >
+                            −
+                          </button>
+                          <span className="card-cart-value">
+                            {quantity === 0
+                              ? t('Add to cart', 'أضف إلى السلة', 'Añadir al carrito')
+                              : quantity}
+                          </span>
+                          <button
+                            type="button"
+                            className="card-cart-btn card-cart-btn--plus"
+                            onClick={async () => { await handleIncrease(item); }}
+                            aria-label={t('Increase quantity', 'زيادة الكمية', 'Aumentar cantidad')}
+                          >
+                            +
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </article>
               ))}
             </div>

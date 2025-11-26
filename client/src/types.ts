@@ -44,3 +44,8 @@ export type ColumnKey =
 
 export type ColumnVisibility = Record<ColumnKey, boolean>;
 
+export interface CartItem {
+  record: ClassRecord;
+  quantity: number;
+}
+

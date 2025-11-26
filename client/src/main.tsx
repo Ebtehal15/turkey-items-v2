@@ -7,6 +7,7 @@ import './index.css';
 import { AdminAccessProvider } from './context/AdminAccessContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { PasswordProvider } from './context/PasswordContext';
+import { CartProvider } from './context/CartContext';
 
 const queryClient = new QueryClient();
 
@@ -23,7 +24,9 @@ ReactDOM.createRoot(rootElement).render(
         <LanguageProvider>
           <PasswordProvider>
             <AdminAccessProvider>
-              <App />
+              <CartProvider>
+                <App />
+              </CartProvider>
             </AdminAccessProvider>
           </PasswordProvider>
         </LanguageProvider>
