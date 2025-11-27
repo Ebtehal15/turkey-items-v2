@@ -33,25 +33,53 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true, // Session cookie'leri için kritik
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Cookie'
+  ],
+  exposedHeaders: ['Set-Cookie'],
+  optionsSuccessStatus: 200, // Legacy browser support
+  preflightContinue: false,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 🔹 Session Middleware
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
-  resave: false,
-  saveUninitialized: true, // Production'da true olmalı
+  secret: process.env.SESSION_SECRET || 'cillii-super-secret-key-2024',
+  resave: true, // Session'ı her istekte kaydet
+  saveUninitialized: true, // Boş session'ları da kaydet
+  rolling: true, // Her istekte cookie süresini yenile
+  name: 'cillii.sid', // Custom session name
   cookie: {
-    secure: process.env.NODE_ENV === 'production', // Production'da HTTPS için true
+    secure: true, // Render HTTPS kullanıyor, true olmalı
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 saat
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Production'da 'none', development'da 'lax'
+    sameSite: 'none', // Cross-origin için 'none' gerekli
+    domain: undefined, // Auto-detect domain
+    path: '/', // Tüm path'lerde geçerli
   },
 }));
+
+// 🔍 Session Debug Middleware
+app.use((req, res, next) => {
+  console.log('🔍 Session Debug:', {
+    sessionID: req.sessionID,
+    hasSession: !!req.session,
+    cartExists: !!req.session?.cart,
+    cartLength: req.session?.cart?.length || 0,
+    userAgent: req.get('User-Agent')?.substring(0, 50),
+    origin: req.get('Origin'),
+    cookie: req.get('Cookie')?.substring(0, 100)
+  });
+  next();
+});
 
 // 📁 Uploads klasör yolu
 const uploadsPath = path.resolve(__dirname, '..', 'uploads');
