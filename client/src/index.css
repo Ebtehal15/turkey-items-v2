@@ -881,8 +881,9 @@ button {
 
   .cart-card__footer-actions {
     justify-content: flex-start;
-    flex-direction: column;
-    gap: 0.75rem;
+    flex-direction: row;
+    gap: 0.5rem;
+    flex-wrap: wrap;
   }
 
   .cart-card__footer-total {
@@ -898,7 +899,8 @@ button {
   }
 
   .cart-card__footer-actions button {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     min-height: 42px;
     padding: 0.65rem 0.85rem;
     font-size: 0.875rem;
@@ -3627,18 +3629,16 @@ button.text.danger:hover {
 
 .cart-card__header-title-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   width: 100%;
   margin-bottom: 0.5rem;
-  position: relative;
 }
 
 .cart-card__header-title-row h2 {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: auto;
+  margin: 0;
+  text-align: center;
+  width: 100%;
 }
 
 .cart-card__header h2 {
@@ -4142,11 +4142,80 @@ button.text.danger:hover {
 
 .cart-card__footer-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 0.75rem;
   width: 100%;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
+}
+
+.cart-clear-btn--footer {
+  padding: 0.6rem 1.1rem !important;
+  font-size: 0.85rem !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 1)) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  width: auto !important;
+  min-width: 140px !important;
+  box-shadow: 
+    0 4px 12px rgba(239, 68, 68, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.45rem !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  cursor: pointer !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.cart-clear-btn--footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+  transition: left 0.5s;
+}
+
+.cart-clear-btn--footer:hover::before {
+  left: 100%;
+}
+
+.cart-clear-btn--footer:hover {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 1), rgba(185, 28, 28, 1)) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  transform: translateY(-2px) scale(1.03) !important;
+  box-shadow: 
+    0 6px 18px rgba(239, 68, 68, 0.4),
+    0 3px 8px rgba(0, 0, 0, 0.15) !important;
+  color: #ffffff !important;
+}
+
+.cart-clear-btn--footer:active {
+  transform: translateY(0) scale(0.98) !important;
+  box-shadow: 
+    0 2px 6px rgba(239, 68, 68, 0.35),
+    inset 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+}
+
+.cart-clear-btn--footer svg {
+  width: 15px !important;
+  height: 15px !important;
+  flex-shrink: 0 !important;
+  transition: transform 0.2s ease !important;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
+}
+
+.cart-clear-btn--footer:hover svg {
+  transform: rotate(-12deg) scale(1.15) !important;
 }
 
 .cart-card__footer-actions .primary {
@@ -4161,7 +4230,9 @@ button.text.danger:hover {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   text-transform: none;
   letter-spacing: 0;
-  width: 100%;
+  width: auto;
+  min-width: 180px;
+  flex: 1;
 }
 
 .cart-card__footer-actions .primary:hover {
@@ -4942,16 +5013,20 @@ button.text.danger:hover {
     font-size: 0.9rem;
   }
 
-  .cart-clear-btn--header {
-    padding: 0.55rem 1rem !important;
-    font-size: 0.85rem !important;
-    border-radius: 10px !important;
-    gap: 0.4rem !important;
+  .cart-card__footer-actions {
+    flex-direction: row;
+    gap: 0.75rem;
   }
 
-  .cart-clear-btn--header svg {
-    width: 14px !important;
-    height: 14px !important;
+  .cart-clear-btn--footer {
+    padding: 0.7rem 1.2rem !important;
+    font-size: 0.9rem !important;
+    min-width: 150px !important;
+  }
+
+  .cart-clear-btn--footer svg {
+    width: 15px !important;
+    height: 15px !important;
   }
 
   .cart-card__form {
@@ -5020,24 +5095,34 @@ button.text.danger:hover {
 
 /* Desktop Styles (1024px and above) */
 @media (min-width: 1024px) {
-  .cart-clear-btn--header {
-    padding: 0.7rem 1.3rem !important;
-    font-size: 0.9rem !important;
+  .cart-card__footer-actions {
+    flex-direction: row;
+    gap: 1rem;
+  }
+
+  .cart-clear-btn--footer {
+    padding: 0.75rem 1.4rem !important;
+    font-size: 0.95rem !important;
+    min-width: 160px !important;
     border-radius: 12px !important;
     gap: 0.5rem !important;
     letter-spacing: 0.01em !important;
   }
 
-  .cart-clear-btn--header svg {
+  .cart-clear-btn--footer svg {
     width: 16px !important;
     height: 16px !important;
   }
 
-  .cart-clear-btn--header:hover {
+  .cart-clear-btn--footer:hover {
     transform: translateY(-3px) scale(1.04) !important;
     box-shadow: 
       0 8px 22px rgba(239, 68, 68, 0.45),
       0 4px 10px rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .cart-card__footer-actions .primary {
+    min-width: 200px;
   }
 }
 
@@ -5597,11 +5682,16 @@ button.text.danger:hover {
 
   .cart-card__footer-actions button {
     flex: 1;
+    min-width: 0;
     min-height: 38px;
     font-size: 0.8rem;
     padding: 0.55rem 0.85rem;
     border-radius: 10px;
     white-space: nowrap;
+  }
+
+  .cart-clear-btn--footer {
+    min-width: 120px !important;
   }
 
   .cart-clear-btn {

@@ -248,27 +248,7 @@ const CartSummary = () => {
       <div className="cart-card__header">
         <div>
           <div className="cart-card__header-title-row">
-            <div style={{ width: hasItems ? 'auto' : '0', flexShrink: 0 }}></div>
-            <h2 style={{ margin: 0, textAlign: 'center', flex: 1 }}>{t('Your cart', 'سلة الطلبات', 'Tu carrito')}</h2>
-            {hasItems ? (
-              <button
-                type="button"
-                onClick={async () => {
-                  if (window.confirm(t('Are you sure you want to clear the cart?', 'هل أنت متأكد من حذف جميع العناصر من السلة؟', '¿Estás seguro de que quieres vaciar el carrito?'))) {
-                    await clearCart();
-                  }
-                }}
-                className="cart-clear-btn cart-clear-btn--header"
-                style={{ flexShrink: 0 }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-                  <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                {t('Clear Cart', 'مسح السلة', 'Vaciar Carrito')}
-              </button>
-            ) : (
-              <div style={{ width: 'auto', flexShrink: 0 }}></div>
-            )}
+            <h2 style={{ margin: 0, textAlign: 'center', width: '100%' }}>{t('Your cart', 'سلة الطلبات', 'Tu carrito')}</h2>
           </div>
           <p>{hasItems ? t('Review and adjust your selection before exporting the order form.', 'راجع وعدّل اختيارك قبل تنزيل نموذج الطلب.', 'Revisa y ajusta tu selección antes de descargar el formulario de pedido.') : t('Add products to build your order form.', 'أضف منتجات لإنشاء نموذج الطلب الخاص بك.', 'Añade productos para crear tu formulario de pedido.')}</p>
         </div>
@@ -401,6 +381,18 @@ const CartSummary = () => {
               </p>
             </div>
             <div className="cart-card__footer-actions">
+              <button
+                type="button"
+                className="cart-clear-btn cart-clear-btn--footer"
+                onClick={async () => {
+                  await clearCart();
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+                  <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {t('Clear Cart', 'مسح السلة', 'Vaciar Carrito')}
+              </button>
               <button
                 type="button"
                 className="primary cart-download-btn"
