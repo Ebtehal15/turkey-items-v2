@@ -455,7 +455,7 @@ const UserPanel = () => {
             <div className="catalog-card-grid">
               {classes.map((item) => (
                 <article key={item.id} className="catalog-card">
-                  <div className="catalog-card__content">
+                  <div className="catalog-card__header-row">
                     <header className="catalog-card__header">
                         <span className="catalog-card__id">
                           {renderCell(item, 'specialId')}
@@ -467,6 +467,21 @@ const UserPanel = () => {
                         <p>{renderCell(item, 'quality')}</p>
                       )}
                     </header>
+                    {columnVisibility.classVideo && (
+                      <div className="catalog-card__video-wrapper">
+                        <VideoPreview
+                          src={resolveVideoSrc(item.classVideo)}
+                          title={(() => {
+                            if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
+                            if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
+                            return item.className;
+                          })()}
+                          variant="card"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="catalog-card__content">
                     <dl>
                       {columnVisibility.mainCategory && (
                         <div>
@@ -504,19 +519,6 @@ const UserPanel = () => {
                       )}
                     </dl>
                   </div>
-                  {columnVisibility.classVideo && (
-                    <div className="catalog-card__video-wrapper">
-                      <VideoPreview
-                        src={resolveVideoSrc(item.classVideo)}
-                        title={(() => {
-                          if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
-                          if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
-                          return item.className;
-                        })()}
-                        variant="card"
-                      />
-                    </div>
-                  )}
                   <div className="catalog-card__actions">
                     {(() => {
                       const quantity = getCartQuantity(item.id);
