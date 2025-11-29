@@ -36,7 +36,10 @@ const CartSummary = () => {
   const [isSharing, setIsSharing] = useState(false);
   const [showInfoPopup, setShowInfoPopup] = useState(false);
   const [showShareOptions, setShowShareOptions] = useState(false);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
   const [generatedPdfBlob, setGeneratedPdfBlob] = useState<Blob | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [currentOrderId, setCurrentOrderId] = useState<number | null>(null);
 
   const hasItems = items.length > 0;
 
@@ -59,6 +62,7 @@ const CartSummary = () => {
     };
 
     const orderId = getNextOrderId();
+    setCurrentOrderId(orderId);
 
     // Create HTML content for PDF with Arabic support
     const now = new Date();
@@ -255,19 +259,28 @@ const CartSummary = () => {
         const pdfBlob = await generatePDFBlob();
         setGeneratedPdfBlob(pdfBlob);
         
-        // Download the PDF first
-        const url = URL.createObjectURL(pdfBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `order-form-${new Date().toISOString().slice(0, 10)}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        // Show share options after download
-        setShowShareOptions(true);
-        setIsGenerating(false);
+      // Download the PDF first
+      const orderId = currentOrderId || getNextOrderId();
+      if (!currentOrderId) {
+        setCurrentOrderId(orderId);
+      }
+      const fileName = `order-form-${orderId}.pdf`;
+      const downloadUrl = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Create preview URL for PDF viewer
+      const previewUrl = URL.createObjectURL(pdfBlob);
+      setPdfPreviewUrl(previewUrl);
+      
+      // Show PDF preview and share options after download (cart summary stays open)
+      setShowPdfPreview(true);
+      setShowShareOptions(true);
+      setIsGenerating(false);
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('Failed to generate PDF', error);
@@ -286,40 +299,65 @@ const CartSummary = () => {
     setIsSharing(true);
 
     try {
-      const fileName = `order-form-${new Date().toISOString().slice(0, 10)}.pdf`;
+      const orderId = currentOrderId || getNextOrderId();
+      const fileName = `order-form-${orderId}.pdf`;
       const file = new File([generatedPdfBlob], fileName, { type: 'application/pdf' });
 
-      // Check if Web Share API is supported
+      // Check if Web Share API is supported and can share files
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({
             files: [file],
             title: t('Order Form', 'نموذج الطلب', 'Formulario de pedido'),
-            text: t('Order Form', 'نموذج الطلب', 'Formulario de pedido'),
+            text: t('Order Form', 'نموذج الطلب', 'Formulario de pedido') + ` - ${customerInfo.fullName}`,
           });
           setShowShareOptions(false);
+          setIsSharing(false);
+          return;
         } catch (shareError: any) {
-          // User cancelled or share failed, fallback to WhatsApp Web
-          if (shareError.name !== 'AbortError') {
-            const message = encodeURIComponent(
-              t('Order Form', 'نموذج الطلب', 'Formulario de pedido') + 
-              ` - ${customerInfo.fullName}\n` +
-              t('Please find the order form attached.', 'يرجى الاطلاع على نموذج الطلب المرفق.', 'Por favor, encuentra el formulario de pedido adjunto.')
-            );
-            const whatsappUrl = `https://wa.me/?text=${message}`;
-            window.open(whatsappUrl, '_blank');
+          // User cancelled - just close modal
+          if (shareError.name === 'AbortError') {
+            setIsSharing(false);
+            return;
           }
+          // If share fails, fall through to WhatsApp Web
         }
-      } else {
-        // Fallback: Open WhatsApp Web with message
-        const message = encodeURIComponent(
-          t('Order Form', 'نموذج الطلب', 'Formulario de pedido') + 
-          ` - ${customerInfo.fullName}\n` +
-          t('Please find the order form attached.', 'يرجى الاطلاع على نموذج الطلب المرفق.', 'Por favor, encuentra el formulario de pedido adjunto.')
-        );
-        const whatsappUrl = `https://wa.me/?text=${message}`;
-        window.open(whatsappUrl, '_blank');
       }
+
+      // Fallback: Try WhatsApp app protocol first (mobile), then WhatsApp Web
+      const message = t('Order Form', 'نموذج الطلب', 'Formulario de pedido') + 
+        ` - ${customerInfo.fullName}\n` +
+        t('Please find the order form attached.', 'يرجى الاطلاع على نموذج الطلب المرفق.', 'Por favor, encuentra el formulario de pedido adjunto.');
+      
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+        // Try WhatsApp app first
+        const whatsappAppUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
+        window.location.href = whatsappAppUrl;
+        
+        // Fallback to WhatsApp Web after a delay if app doesn't open
+        setTimeout(() => {
+          const whatsappWebUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+          window.open(whatsappWebUrl, '_blank');
+        }, 1000);
+      } else {
+        // Desktop: Open WhatsApp Web
+        const whatsappWebUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+        window.open(whatsappWebUrl, '_blank');
+      }
+      
+      // Also download the PDF so user can attach it manually
+      const downloadUrl = URL.createObjectURL(generatedPdfBlob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+      
+      setShowShareOptions(false);
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to share PDF', error);
@@ -338,7 +376,8 @@ const CartSummary = () => {
     setIsSharing(true);
 
     try {
-      const fileName = `order-form-${new Date().toISOString().slice(0, 10)}.pdf`;
+      const orderId = currentOrderId || getNextOrderId();
+      const fileName = `order-form-${orderId}.pdf`;
       const file = new File([generatedPdfBlob], fileName, { type: 'application/pdf' });
 
       // Check if Web Share API is supported
@@ -513,6 +552,75 @@ const CartSummary = () => {
         )}
       </div>
 
+      {/* PDF File Card - shown in cart summary */}
+      {showPdfPreview && pdfPreviewUrl && generatedPdfBlob && (
+        <div className="cart-pdf-file-section">
+          <div className="cart-pdf-file-item">
+            <div className="cart-pdf-file-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" fill="#DC2626"/>
+                <path d="M14 2v6h6" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <text x="12" y="18" fill="#fff" fontSize="8" fontWeight="bold" textAnchor="middle">PDF</text>
+              </svg>
+            </div>
+            <div className="cart-pdf-file-info">
+              <div className="cart-pdf-file-name">
+                {currentOrderId ? `order-form-${currentOrderId}.pdf` : `order-form-${new Date().toISOString().slice(0, 10)}.pdf`}
+              </div>
+              <div className="cart-pdf-file-size">
+                {(generatedPdfBlob.size / (1024 * 1024)).toFixed(2)} MB
+              </div>
+            </div>
+            <div className="cart-pdf-file-actions">
+              <button
+                type="button"
+                className="cart-pdf-file-action-btn"
+                onClick={() => {
+                  if (pdfPreviewUrl) {
+                    window.open(pdfPreviewUrl, '_blank');
+                  }
+                }}
+                title={t('Open PDF', 'فتح PDF', 'Abrir PDF')}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="cart-pdf-file-action-btn cart-pdf-file-action-btn--share"
+                onClick={async () => {
+                  setShowShareOptions(true);
+                }}
+                title={t('Share', 'مشاركة', 'Compartir')}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" fill="currentColor"/>
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="cart-pdf-file-action-btn cart-pdf-file-action-btn--delete"
+                onClick={() => {
+                  setShowPdfPreview(false);
+                  setCurrentOrderId(null);
+                  if (pdfPreviewUrl) {
+                    URL.revokeObjectURL(pdfPreviewUrl);
+                    setPdfPreviewUrl(null);
+                  }
+                  setGeneratedPdfBlob(null);
+                }}
+                title={t('Delete', 'حذف', 'Eliminar')}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {hasItems && (
           <div className="cart-card__footer">
             <div className="cart-card__footer-total">
@@ -549,6 +657,7 @@ const CartSummary = () => {
             </div>
           </div>
       )}
+
 
       {/* Share Options Modal */}
       {showShareOptions && (
