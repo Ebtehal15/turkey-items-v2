@@ -50,19 +50,21 @@ const CartSummary = () => {
     return t('Order total', 'إجمالي الطلب', 'Total del pedido');
   }, [hasUnknownPrices, t]);
 
-  const generatePDFBlob = async (): Promise<Blob> => {
-    // Generate unique order ID starting from 1000
-    const getNextOrderId = (): number => {
-      const STORAGE_KEY = 'lastOrderId';
-      const START_ID = 1000;
-      const lastId = localStorage.getItem(STORAGE_KEY);
-      const nextId = lastId ? parseInt(lastId, 10) + 1 : START_ID;
-      localStorage.setItem(STORAGE_KEY, nextId.toString());
-      return nextId;
-    };
+  // Generate unique order ID starting from 1000
+  const getNextOrderId = (): number => {
+    const STORAGE_KEY = 'lastOrderId';
+    const START_ID = 1000;
+    const lastId = localStorage.getItem(STORAGE_KEY);
+    const nextId = lastId ? parseInt(lastId, 10) + 1 : START_ID;
+    localStorage.setItem(STORAGE_KEY, nextId.toString());
+    return nextId;
+  };
 
-    const orderId = getNextOrderId();
-    setCurrentOrderId(orderId);
+  const generatePDFBlob = async (): Promise<Blob> => {
+    const orderId = currentOrderId || getNextOrderId();
+    if (!currentOrderId) {
+      setCurrentOrderId(orderId);
+    }
 
     // Create HTML content for PDF with Arabic support
     const now = new Date();
