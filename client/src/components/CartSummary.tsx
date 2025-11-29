@@ -48,6 +48,18 @@ const CartSummary = () => {
   }, [hasUnknownPrices, t]);
 
   const generatePDFBlob = async (): Promise<Blob> => {
+    // Generate unique order ID starting from 1000
+    const getNextOrderId = (): number => {
+      const STORAGE_KEY = 'lastOrderId';
+      const START_ID = 1000;
+      const lastId = localStorage.getItem(STORAGE_KEY);
+      const nextId = lastId ? parseInt(lastId, 10) + 1 : START_ID;
+      localStorage.setItem(STORAGE_KEY, nextId.toString());
+      return nextId;
+    };
+
+    const orderId = getNextOrderId();
+
     // Create HTML content for PDF with Arabic support
     const now = new Date();
     const formattedDate = now.toLocaleDateString('en-GB'); // dd/mm/yyyy
@@ -73,13 +85,20 @@ const CartSummary = () => {
           margin-bottom: 20px;
         ">
           <div></div>
-          <h1 style="
-            font-size: 18px;
-            margin: 0;
-            color: #0f172a;
-            font-weight: bold;
-            text-align: center;
-          ">${t('Order Form', 'نموذج الطلب', 'Formulario de pedido')}</h1>
+          <div style="text-align: center;">
+            <h1 style="
+              font-size: 18px;
+              margin: 0 0 4px 0;
+              color: #0f172a;
+              font-weight: bold;
+            ">${t('Order Form', 'نموذج الطلب', 'Formulario de pedido')}</h1>
+            <p style="
+              margin: 0;
+              color: #0f172a;
+              font-size: 11px;
+              font-weight: 600;
+            ">${t('Order ID', 'رقم الطلب', 'ID de Pedido')}: ${orderId}</p>
+          </div>
           <div style="
             color: #0f172a;
             font-size: 10px;
@@ -93,6 +112,7 @@ const CartSummary = () => {
           <p style="margin: 4px 0; font-size: 10px;"><strong>${t('Full Name', 'الاسم الكامل', 'Nombre completo')}:</strong> ${customerInfo.fullName}</p>
           <p style="margin: 4px 0; font-size: 10px;"><strong>${t('Company', 'الشركة', 'Empresa')}:</strong> ${customerInfo.company || t('N/A', 'غير متوفر', 'No disponible')}</p>
           <p style="margin: 4px 0; font-size: 10px;"><strong>${t('Phone', 'الهاتف', 'Teléfono')}:</strong> ${customerInfo.phone || t('N/A', 'غير متوفر', 'No disponible')}</p>
+          <p style="margin: 4px 0; font-size: 10px;"><strong>${t('Sales Person', 'مندوب المبيعات', 'Vendedor')}:</strong> ${customerInfo.salesPerson || t('N/A', 'غير متوفر', 'No disponible')}</p>
         </div>
 
         <div style="margin-bottom: 15px;">
@@ -106,6 +126,7 @@ const CartSummary = () => {
             <thead>
               <tr style="background: #0f172a; color: white;">
                 <th style="padding: 6px 4px; text-align: ${language === 'ar' ? 'right' : 'left'}; font-size: 9px; font-weight: bold;">${t('Code', 'الرمز', 'Código')}</th>
+                <th style="padding: 6px 4px; text-align: ${language === 'ar' ? 'right' : 'left'}; font-size: 9px; font-weight: bold;">${t('Group', 'المجموعة', 'Grupo')}</th>
                 <th style="padding: 6px 4px; text-align: ${language === 'ar' ? 'right' : 'left'}; font-size: 9px; font-weight: bold;">${t('Product Name', 'اسم المنتج', 'Nombre del producto')}</th>
                 <th style="padding: 6px 4px; text-align: center; font-size: 9px; font-weight: bold;">${t('Quantity', 'الكمية', 'Cantidad')}</th>
                 <th style="padding: 6px 4px; text-align: ${language === 'ar' ? 'left' : 'right'}; font-size: 9px; font-weight: bold;">${t('Unit Price', 'سعر الوحدة', 'Precio unitario')}</th>
@@ -124,6 +145,7 @@ const CartSummary = () => {
                 return `
                   <tr style="border-bottom: 1px solid #e5e7eb; ${index % 2 === 0 ? 'background: #f9fafb;' : 'background: white;'}">
                     <td style="padding: 4px 6px; text-align: ${language === 'ar' ? 'right' : 'left'}; font-size: 8px;">${record.specialId}</td>
+                    <td style="padding: 4px 6px; text-align: ${language === 'ar' ? 'right' : 'left'}; font-size: 8px;">${record.quality || t('N/A', 'غير متوفر', 'No disponible')}</td>
                     <td style="padding: 4px 6px; text-align: ${language === 'ar' ? 'right' : 'left'}; font-size: 8px;">${name}</td>
                     <td style="padding: 4px 6px; text-align: center; font-size: 8px;">${quantity}</td>
                     <td style="padding: 4px 6px; text-align: ${language === 'ar' ? 'left' : 'right'}; font-size: 8px;">
@@ -307,7 +329,7 @@ const CartSummary = () => {
     }
   };
 
-  const shareToTelegram = async () => {
+  const shareOrderForm = async () => {
     if (!generatedPdfBlob) {
       return;
     }
@@ -325,30 +347,20 @@ const CartSummary = () => {
           await navigator.share({
             files: [file],
             title: t('Order Form', 'نموذج الطلب', 'Formulario de pedido'),
-            text: t('Order Form', 'نموذج الطلب', 'Formulario de pedido'),
+            text: t('Order Form', 'نموذج الطلب', 'Formulario de pedido') + ` - ${customerInfo.fullName}`,
           });
           setShowShareOptions(false);
         } catch (shareError: any) {
-          // User cancelled or share failed, fallback to Telegram Web
-          if (shareError.name !== 'AbortError') {
-            const message = encodeURIComponent(
-              t('Order Form', 'نموذج الطلب', 'Formulario de pedido') + 
-              ` - ${customerInfo.fullName}\n` +
-              t('Please find the order form attached.', 'يرجى الاطلاع على نموذج الطلب المرفق.', 'Por favor, encuentra el formulario de pedido adjunto.')
-            );
-            const telegramUrl = `https://t.me/share/url?url=&text=${message}`;
-            window.open(telegramUrl, '_blank');
+          // User cancelled - just close the modal
+          if (shareError.name === 'AbortError') {
+            setShowShareOptions(false);
+          } else {
+            setFormError(t('Failed to share. Please try again.', 'تعذر المشاركة. يرجى المحاولة مرة أخرى.', 'No se pudo compartir. Inténtalo de nuevo.'));
           }
         }
       } else {
-        // Fallback: Open Telegram Web with message
-        const message = encodeURIComponent(
-          t('Order Form', 'نموذج الطلب', 'Formulario de pedido') + 
-          ` - ${customerInfo.fullName}\n` +
-          t('Please find the order form attached.', 'يرجى الاطلاع على نموذج الطلب المرفق.', 'Por favor, encuentra el formulario de pedido adjunto.')
-        );
-        const telegramUrl = `https://t.me/share/url?url=&text=${message}`;
-        window.open(telegramUrl, '_blank');
+        // Web Share API not supported - show error message
+        setFormError(t('Share feature is not available on this device.', 'ميزة المشاركة غير متاحة على هذا الجهاز.', 'La función de compartir no está disponible en este dispositivo.'));
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -573,16 +585,16 @@ const CartSummary = () => {
                 </button>
                 <button
                   type="button"
-                  className="cart-share-option-btn cart-share-option-btn--telegram"
+                  className="cart-share-option-btn cart-share-option-btn--share"
                   onClick={async () => {
-                    await shareToTelegram();
+                    await shareOrderForm();
                   }}
                   disabled={isSharing}
                 >
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z" fill="currentColor"/>
+                    <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" fill="currentColor"/>
                   </svg>
-                  <span>{t('Share via Telegram', 'مشاركة عبر تيليجرام', 'Compartir por Telegram')}</span>
+                  <span>{t('Share', 'مشاركة', 'Compartir')}</span>
                 </button>
               </div>
             </div>
