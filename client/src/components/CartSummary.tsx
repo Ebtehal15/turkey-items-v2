@@ -35,6 +35,8 @@ const CartSummary = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [showInfoPopup, setShowInfoPopup] = useState(false);
+  const [showShareOptions, setShowShareOptions] = useState(false);
+  const [generatedPdfBlob, setGeneratedPdfBlob] = useState<Blob | null>(null);
 
   const hasItems = items.length > 0;
 
@@ -211,7 +213,7 @@ const CartSummary = () => {
     return pdf.output('blob');
   };
 
-  const downloadOrderForm = async () => {
+  const handleDownloadClick = async () => {
     if (!items.length) {
       return;
     }
@@ -226,6 +228,9 @@ const CartSummary = () => {
 
     try {
       const pdfBlob = await generatePDFBlob();
+      setGeneratedPdfBlob(pdfBlob);
+      
+      // Download the PDF first
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement('a');
       link.href = url;
@@ -234,6 +239,9 @@ const CartSummary = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+      
+      // Show share options after download
+      setShowShareOptions(true);
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to generate PDF', error);
@@ -243,13 +251,24 @@ const CartSummary = () => {
     }
   };
 
-  const shareToWhatsApp = async () => {
-    if (!items.length) {
+  const downloadOrderForm = async () => {
+    if (!generatedPdfBlob) {
       return;
     }
 
-    if (!customerInfo.fullName.trim()) {
-      setShowInfoPopup(true);
+    const url = URL.createObjectURL(generatedPdfBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `order-form-${new Date().toISOString().slice(0, 10)}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setShowShareOptions(false);
+  };
+
+  const shareToWhatsApp = async () => {
+    if (!generatedPdfBlob) {
       return;
     }
 
@@ -257,9 +276,8 @@ const CartSummary = () => {
     setIsSharing(true);
 
     try {
-      const pdfBlob = await generatePDFBlob();
       const fileName = `order-form-${new Date().toISOString().slice(0, 10)}.pdf`;
-      const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+      const file = new File([generatedPdfBlob], fileName, { type: 'application/pdf' });
 
       // Check if Web Share API is supported
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -269,10 +287,17 @@ const CartSummary = () => {
             title: t('Order Form', 'نموذج الطلب', 'Formulario de pedido'),
             text: t('Order Form', 'نموذج الطلب', 'Formulario de pedido'),
           });
+          setShowShareOptions(false);
         } catch (shareError: any) {
-          // User cancelled or share failed, fallback to download
+          // User cancelled or share failed, fallback to WhatsApp Web
           if (shareError.name !== 'AbortError') {
-            throw shareError;
+            const message = encodeURIComponent(
+              t('Order Form', 'نموذج الطلب', 'Formulario de pedido') + 
+              ` - ${customerInfo.fullName}\n` +
+              t('Please find the order form attached.', 'يرجى الاطلاع على نموذج الطلب المرفق.', 'Por favor, encuentra el formulario de pedido adjunto.')
+            );
+            const whatsappUrl = `https://wa.me/?text=${message}`;
+            window.open(whatsappUrl, '_blank');
           }
         }
       } else {
@@ -284,16 +309,58 @@ const CartSummary = () => {
         );
         const whatsappUrl = `https://wa.me/?text=${message}`;
         window.open(whatsappUrl, '_blank');
-        
-        // Also download the PDF as fallback
-        const url = URL.createObjectURL(pdfBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to share PDF', error);
+      setFormError(t('Failed to share PDF. Please try again.', 'تعذر مشاركة ملف PDF. يرجى المحاولة مرة أخرى.', 'No se pudo compartir el PDF. Inténtalo de nuevo.'));
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const shareToTelegram = async () => {
+    if (!generatedPdfBlob) {
+      return;
+    }
+
+    setFormError(null);
+    setIsSharing(true);
+
+    try {
+      const fileName = `order-form-${new Date().toISOString().slice(0, 10)}.pdf`;
+      const file = new File([generatedPdfBlob], fileName, { type: 'application/pdf' });
+
+      // Check if Web Share API is supported
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: t('Order Form', 'نموذج الطلب', 'Formulario de pedido'),
+            text: t('Order Form', 'نموذج الطلب', 'Formulario de pedido'),
+          });
+          setShowShareOptions(false);
+        } catch (shareError: any) {
+          // User cancelled or share failed, fallback to Telegram Web
+          if (shareError.name !== 'AbortError') {
+            const message = encodeURIComponent(
+              t('Order Form', 'نموذج الطلب', 'Formulario de pedido') + 
+              ` - ${customerInfo.fullName}\n` +
+              t('Please find the order form attached.', 'يرجى الاطلاع على نموذج الطلب المرفق.', 'Por favor, encuentra el formulario de pedido adjunto.')
+            );
+            const telegramUrl = `https://t.me/share/url?url=&text=${message}`;
+            window.open(telegramUrl, '_blank');
+          }
+        }
+      } else {
+        // Fallback: Open Telegram Web with message
+        const message = encodeURIComponent(
+          t('Order Form', 'نموذج الطلب', 'Formulario de pedido') + 
+          ` - ${customerInfo.fullName}\n` +
+          t('Please find the order form attached.', 'يرجى الاطلاع على نموذج الطلب المرفق.', 'Por favor, encuentra el formulario de pedido adjunto.')
+        );
+        const telegramUrl = `https://t.me/share/url?url=&text=${message}`;
+        window.open(telegramUrl, '_blank');
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -472,37 +539,67 @@ const CartSummary = () => {
               <button
                 type="button"
                 className="primary cart-download-btn"
-                onClick={downloadOrderForm}
+                onClick={handleDownloadClick}
                 disabled={isGenerating || isSharing}
               >
                 {isGenerating
                   ? t('Preparing PDF...', '...جاري تجهيز ملف PDF', 'Preparando PDF...')
                   : t('Download order form', 'تنزيل نموذج الطلب', 'Descargar formulario de pedido')}
               </button>
-              <button
-                type="button"
-                className="primary cart-whatsapp-btn"
-                onClick={shareToWhatsApp}
-                disabled={isGenerating || isSharing}
-              >
-                {isSharing ? (
-                  <>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" fill="currentColor"/>
-                    </svg>
-                    <span className="cart-whatsapp-btn-text">{t('Sharing...', '...جاري المشاركة', 'Compartiendo...')}</span>
-                  </>
-                ) : (
-                  <>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" fill="currentColor"/>
-                    </svg>
-                    <span className="cart-whatsapp-btn-text">{t('Send to WhatsApp', 'إرسال إلى واتساب', 'Enviar a WhatsApp')}</span>
-                  </>
-                )}
-              </button>
             </div>
           </div>
+      )}
+
+      {/* Share Options Modal */}
+      {showShareOptions && (
+        <div className="cart-info-popup-overlay" onClick={() => setShowShareOptions(false)}>
+          <div className="cart-info-popup" onClick={(e) => e.stopPropagation()}>
+            <div className="cart-info-popup-header">
+              <h3>{t('Share Order Form', 'مشاركة نموذج الطلب', 'Compartir Formulario de Pedido')}</h3>
+              <button
+                type="button"
+                className="cart-info-popup-close"
+                onClick={() => setShowShareOptions(false)}
+                aria-label={t('Close', 'إغلاق', 'Cerrar')}
+              >
+                ×
+              </button>
+            </div>
+            <div className="cart-info-popup-content">
+              <p style={{ marginBottom: '1.5rem' }}>
+                {t('Choose how you want to share your order form:', 'اختر طريقة مشاركة نموذج الطلب:', 'Elige cómo quieres compartir tu formulario de pedido:')}
+              </p>
+              <div className="cart-share-options">
+                <button
+                  type="button"
+                  className="cart-share-option-btn cart-share-option-btn--whatsapp"
+                  onClick={async () => {
+                    await shareToWhatsApp();
+                  }}
+                  disabled={isSharing}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" fill="currentColor"/>
+                  </svg>
+                  <span>{t('Share via WhatsApp', 'مشاركة عبر واتساب', 'Compartir por WhatsApp')}</span>
+                </button>
+                <button
+                  type="button"
+                  className="cart-share-option-btn cart-share-option-btn--telegram"
+                  onClick={async () => {
+                    await shareToTelegram();
+                  }}
+                  disabled={isSharing}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z" fill="currentColor"/>
+                  </svg>
+                  <span>{t('Share via Telegram', 'مشاركة عبر تيليجرام', 'Compartir por Telegram')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Info Popup Modal */}

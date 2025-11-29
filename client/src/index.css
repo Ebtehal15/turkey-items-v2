@@ -323,6 +323,28 @@ button {
   }
 }
 
+@keyframes slideUpMobile {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleInMobile {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .nav__cart-popover .cart-card {
   margin-top: 0;
   max-height: 88vh;
@@ -1284,7 +1306,7 @@ button {
 button {
   padding:10px 20px;
   margin:5px 5px 5px 5px;
-  border-radius: 200px;
+  border-radius: 12px;
   border: none;
   background: transparent;
   background-size: 200% 200%;
@@ -5169,13 +5191,13 @@ button.text.danger:hover {
   .nav__cart-overlay {
     background: rgba(2, 6, 23, 0.85);
     backdrop-filter: blur(18px);
+    animation: fadeIn 0.6s ease;
   }
 
   .nav__cart-popover {
     width: 100vw;
     height: 100vh;
     inset: 0;
-    transform: none;
     padding: clamp(0.65rem, 3vw, 1.5rem);
     border-radius: 0;
     border: none;
@@ -5187,6 +5209,7 @@ button.text.danger:hover {
     justify-content: center;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    animation: slideUpMobile 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
   .nav__cart-popover::-webkit-scrollbar {
@@ -5220,6 +5243,7 @@ button.text.danger:hover {
     flex-direction: column;
     overflow: hidden;
     position: relative;
+    animation: scaleInMobile 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.2s both;
   }
 
   .nav__cart-close {
@@ -6181,6 +6205,103 @@ button.text.danger:hover {
     padding: 0.65rem 1.25rem;
     font-size: 0.9rem;
     width: 100%;
+  }
+}
+
+/* Share Options Styles */
+.cart-share-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.cart-share-option-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background: white;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.cart-share-option-btn:hover {
+  border-color: #0f172a;
+  background: #f8fafc;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+
+.cart-share-option-btn:active {
+  transform: translateY(0);
+}
+
+.cart-share-option-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cart-share-option-btn svg {
+  flex-shrink: 0;
+  color: #0f172a;
+}
+
+.cart-share-option-btn span {
+  flex: 1;
+}
+
+/* WhatsApp button special styling */
+.cart-share-option-btn--whatsapp {
+  border-color: #25D366;
+}
+
+.cart-share-option-btn--whatsapp:hover {
+  background: #f0fdf4;
+  border-color: #25D366;
+}
+
+.cart-share-option-btn--whatsapp svg {
+  color: #25D366;
+}
+
+/* Telegram button special styling */
+.cart-share-option-btn--telegram {
+  border-color: #0088cc;
+}
+
+.cart-share-option-btn--telegram:hover {
+  background: #e6f4ff;
+  border-color: #0088cc;
+}
+
+.cart-share-option-btn--telegram svg {
+  color: #0088cc;
+}
+
+/* Mobile Responsive for Share Options */
+@media (max-width: 768px) {
+  .cart-share-options {
+    gap: 0.625rem;
+  }
+
+  .cart-share-option-btn {
+    padding: 0.875rem 1rem;
+    font-size: 0.95rem;
+    gap: 0.625rem;
+  }
+
+  .cart-share-option-btn svg {
+    width: 18px;
+    height: 18px;
   }
 }
 
