@@ -121,8 +121,53 @@ const CartSummary = () => {
             align-items: flex-start;
             justify-content: space-between;
             margin-bottom: 20px;
+            direction: ltr;
           "
         >
+          ${
+            pdfLanguage === 'ar'
+              ? `
+          <div
+            style="
+              flex: 1;
+              text-align: left;
+              color: #0f172a;
+              font-size: 14px;
+              font-weight: bold;
+            "
+          >
+            ${formattedDate} - ${formattedTime}
+          </div>
+          <div
+            style="
+              text-align: center;
+              flex: 0 0 auto;
+            "
+          >
+            <h1
+              style="
+                font-size: 20px;
+                margin: 0 0 4px 0;
+                color: #0f172a;
+                font-weight: bold;
+              "
+            >
+              ${t('Order Form', 'نموذج الطلب', 'Formulario de pedido')}
+            </h1>
+            <p
+              style="
+                margin: 0;
+                color: #0f172a;
+                font-size: 17px;
+                font-weight: 600;
+              "
+            >
+              ${t('Order ID', 'رقم الطلب', 'ID de Pedido')}: ${orderId}
+            </p>
+          </div>
+          <div style="flex: 1;"></div>
+          `
+              : `
           <div style="flex: 1;"></div>
           <div
             style="
@@ -132,7 +177,7 @@ const CartSummary = () => {
           >
             <h1
               style="
-                font-size: 26px;
+                font-size: 20px;
                 margin: 0 0 4px 0;
                 color: #0f172a;
                 font-weight: bold;
@@ -162,6 +207,8 @@ const CartSummary = () => {
           >
             ${formattedDate} - ${formattedTime}
           </div>
+          `
+          }
         </div>
         
         <div style="margin-bottom: 20px;">
