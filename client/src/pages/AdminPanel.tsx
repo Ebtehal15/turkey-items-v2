@@ -24,7 +24,7 @@ import {
   buildColumnLabels,
   orderedColumns,
 } from '../constants/columns';
-import { fetchColumnVisibility, updateColumnVisibility, fetchGoogleSheetsSettings, updateGoogleSheetsSettings, type GoogleSheetsSettings } from '../api/settings';
+import { fetchColumnVisibility, updateColumnVisibility, fetchGoogleSheetsSettings, updateGoogleSheetsSettings } from '../api/settings';
 import useTranslate from '../hooks/useTranslate';
 import { getOrderHistory, deleteOrderFromHistory, type OrderHistoryItem } from '../utils/orderHistory';
 
