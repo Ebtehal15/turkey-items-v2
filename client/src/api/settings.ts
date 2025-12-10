@@ -12,6 +12,21 @@ export const updateColumnVisibility = async (columns: ColumnVisibility): Promise
   return normalizeColumnVisibility(response.data);
 };
 
+export interface GoogleSheetsSettings {
+  url: string;
+  autoSync: boolean;
+}
+
+export const fetchGoogleSheetsSettings = async (): Promise<GoogleSheetsSettings> => {
+  const response = await apiClient.get<GoogleSheetsSettings>('/api/settings/google-sheets');
+  return response.data;
+};
+
+export const updateGoogleSheetsSettings = async (settings: Partial<GoogleSheetsSettings>): Promise<GoogleSheetsSettings> => {
+  const response = await apiClient.put<GoogleSheetsSettings>('/api/settings/google-sheets', settings);
+  return response.data;
+};
+
 
 
 

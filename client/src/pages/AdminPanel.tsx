@@ -12,6 +12,7 @@ import {
   deleteClass,
   generateSpecialId,
   updateClass,
+  syncFromGoogleSheets,
 } from '../api/classes';
 import { CLASSES_QUERY_KEY, useClasses } from '../hooks/useClasses';
 import type { BulkUploadResult, ClassFilters, ClassRecord, ColumnVisibility, ColumnKey } from '../types';
@@ -23,7 +24,7 @@ import {
   buildColumnLabels,
   orderedColumns,
 } from '../constants/columns';
-import { fetchColumnVisibility, updateColumnVisibility } from '../api/settings';
+import { fetchColumnVisibility, updateColumnVisibility, fetchGoogleSheetsSettings, updateGoogleSheetsSettings, type GoogleSheetsSettings } from '../api/settings';
 import useTranslate from '../hooks/useTranslate';
 import { getOrderHistory, deleteOrderFromHistory, type OrderHistoryItem } from '../utils/orderHistory';
 
@@ -94,6 +95,16 @@ const AdminPanel = () => {
   const [expandedPanel, setExpandedPanel] = useState<'video' | 'price' | 'arabic' | 'english' | 'name' | 'withVideo' | null>(null);
   const [orderHistory, setOrderHistory] = useState<OrderHistoryItem[]>([]);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
+  const [googleSheetsUrl, setGoogleSheetsUrl] = useState('');
+  const [googleSheetsAutoSync, setGoogleSheetsAutoSync] = useState(false);
+  const [showGoogleSheets, setShowGoogleSheets] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('showGoogleSheets');
+      return saved === 'true';
+    }
+    return false;
+  });
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const queryClient = useQueryClient();
   const { data: allClasses = [] } = useClasses({ includeZeroQuantity: true });
@@ -150,6 +161,92 @@ const AdminPanel = () => {
   useEffect(() => {
     setOrderHistory(getOrderHistory());
   }, []);
+
+  // Load Google Sheets settings
+  const googleSheetsQuery = useQuery({
+    queryKey: ['googleSheetsSettings'],
+    queryFn: fetchGoogleSheetsSettings,
+    refetchInterval: 60000, // Refetch settings every minute to check for auto-sync changes
+  });
+
+  // Update state when query data changes
+  useEffect(() => {
+    if (googleSheetsQuery.data) {
+      setGoogleSheetsUrl(googleSheetsQuery.data.url);
+      setGoogleSheetsAutoSync(googleSheetsQuery.data.autoSync);
+    }
+  }, [googleSheetsQuery.data]);
+
+  // Save showGoogleSheets state to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('showGoogleSheets', String(showGoogleSheets));
+    }
+  }, [showGoogleSheets]);
+
+  const googleSheetsMutation = useMutation({
+    mutationFn: updateGoogleSheetsSettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['googleSheetsSettings'] });
+      setFeedback(t('Google Sheets settings saved successfully.', 'تم حفظ إعدادات Google Sheets بنجاح.', 'Configuración de Google Sheets guardada exitosamente.'));
+    },
+    onError: (error: AxiosError<{ message?: string; error?: string }>) => {
+      setErrorFeedback(extractErrorMessage(error));
+    },
+  });
+
+  const syncFromSheetsMutation = useMutation({
+    mutationFn: ({ url, updateOnly }: { url: string; updateOnly: boolean }) => syncFromGoogleSheets(url, updateOnly),
+    onSuccess: (data) => {
+      setBulkReport(data);
+      queryClient.invalidateQueries({ queryKey: [CLASSES_QUERY_KEY] });
+      setFeedback(
+        t(
+          `Sync completed: ${data.processedCount} processed, ${data.skippedCount} skipped.`,
+          `اكتمل المزامنة: ${data.processedCount} معالج، ${data.skippedCount} تم تخطيه.`,
+          `Sincronización completada: ${data.processedCount} procesados, ${data.skippedCount} omitidos.`
+        )
+      );
+      setIsSyncing(false);
+    },
+    onError: (error: AxiosError<{ message?: string; error?: string }>) => {
+      setErrorFeedback(extractErrorMessage(error));
+      setIsSyncing(false);
+    },
+  });
+
+  // Auto-sync from Google Sheets every 5 minutes if enabled
+  useEffect(() => {
+    if (!googleSheetsAutoSync || !googleSheetsUrl.trim()) {
+      return;
+    }
+
+    // Sync function
+    const performSync = () => {
+      if (!syncFromSheetsMutation.isPending && !isSyncing) {
+        setIsSyncing(true);
+        syncFromSheetsMutation.mutate(
+          {
+            url: googleSheetsUrl,
+            updateOnly: false,
+          },
+          {
+            onSettled: () => {
+              setIsSyncing(false);
+            },
+          }
+        );
+      }
+    };
+
+    // Perform initial sync immediately when auto-sync is enabled
+    performSync();
+
+    // Then sync every 5 minutes
+    const interval = setInterval(performSync, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [googleSheetsAutoSync, googleSheetsUrl, syncFromSheetsMutation, isSyncing]);
 
   const categories = useMemo<string[]>(() => {
     const set = new Set<string>();
@@ -1821,6 +1918,119 @@ const AdminPanel = () => {
             )}
           </div>
         )}
+
+        {/* Google Sheets Sync Section */}
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div>
+              <h2>{t('Google Sheets Sync', 'مزامنة Google Sheets', 'Sincronización de Google Sheets')}</h2>
+              <p>{t('Sync your product data from an online Google Sheets document in real-time.', 'قم بمزامنة بيانات المنتجات من مستند Google Sheets عبر الإنترنت في الوقت الفعلي.', 'Sincroniza los datos de tus productos desde un documento de Google Sheets en línea en tiempo real.')}</p>
+            </div>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setShowGoogleSheets(!showGoogleSheets);
+                if (!showGoogleSheets) {
+                  googleSheetsQuery.refetch();
+                }
+              }}
+            >
+              {showGoogleSheets ? t('Hide', 'إخفاء', 'Ocultar') : t('Show', 'عرض', 'Mostrar')}
+            </button>
+          </div>
+
+          {showGoogleSheets && (
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label htmlFor="google-sheets-url" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                  {t('Google Sheets URL', 'رابط Google Sheets', 'URL de Google Sheets')}
+                </label>
+                <input
+                  id="google-sheets-url"
+                  type="text"
+                  value={googleSheetsUrl}
+                  onChange={(e) => setGoogleSheetsUrl(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  style={{ width: '100%', padding: '0.5rem', fontSize: '0.9rem' }}
+                />
+                <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
+                  {t('Make sure the Google Sheets is set to "Anyone with the link can view".', 'تأكد من أن Google Sheets مضبوط على "أي شخص لديه الرابط يمكنه المشاهدة".', 'Asegúrate de que Google Sheets esté configurado en "Cualquiera con el enlace puede ver".')}
+                </p>
+              </div>
+
+              <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input
+                  id="google-sheets-auto-sync"
+                  type="checkbox"
+                  checked={googleSheetsAutoSync}
+                  onChange={(e) => setGoogleSheetsAutoSync(e.target.checked)}
+                />
+                <label htmlFor="google-sheets-auto-sync" style={{ cursor: 'pointer' }}>
+                  {t('Enable automatic sync (syncs every 5 minutes)', 'تفعيل المزامنة التلقائية (تزامن كل 5 دقائق)', 'Habilitar sincronización automática (sincroniza cada 5 minutos)')}
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    googleSheetsMutation.mutate({
+                      url: googleSheetsUrl,
+                      autoSync: googleSheetsAutoSync,
+                    });
+                  }}
+                  disabled={googleSheetsMutation.isPending}
+                >
+                  {googleSheetsMutation.isPending
+                    ? t('Saving...', 'جاري الحفظ...', 'Guardando...')
+                    : t('Save Settings', 'حفظ الإعدادات', 'Guardar Configuración')}
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    if (!googleSheetsUrl.trim()) {
+                      setErrorFeedback(t('Please enter a Google Sheets URL first.', 'يرجى إدخال رابط Google Sheets أولاً.', 'Por favor ingresa una URL de Google Sheets primero.'));
+                      return;
+                    }
+                    setIsSyncing(true);
+                    syncFromSheetsMutation.mutate({
+                      url: googleSheetsUrl,
+                      updateOnly,
+                    });
+                  }}
+                  disabled={isSyncing || !googleSheetsUrl.trim() || syncFromSheetsMutation.isPending}
+                >
+                  {isSyncing || syncFromSheetsMutation.isPending
+                    ? t('Syncing...', 'جاري المزامنة...', 'Sincronizando...')
+                    : t('Sync Now', 'مزامنة الآن', 'Sincronizar Ahora')}
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    if (!googleSheetsUrl.trim()) {
+                      setErrorFeedback(t('Please enter a Google Sheets URL first.', 'يرجى إدخال رابط Google Sheets أولاً.', 'Por favor ingresa una URL de Google Sheets primero.'));
+                      return;
+                    }
+                    setIsSyncing(true);
+                    syncFromSheetsMutation.mutate({
+                      url: googleSheetsUrl,
+                      updateOnly: true,
+                    });
+                  }}
+                  disabled={isSyncing || !googleSheetsUrl.trim() || syncFromSheetsMutation.isPending}
+                >
+                  {isSyncing || syncFromSheetsMutation.isPending
+                    ? t('Update Only...', 'تحديث فقط...', 'Solo Actualizar...')
+                    : t('Update Existing Only', 'تحديث الموجود فقط', 'Solo Actualizar Existentes')}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Order History Section */}
         <div className="card">

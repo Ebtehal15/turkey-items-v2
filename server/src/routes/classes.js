@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const XLSX = require('xlsx');
+const axios = require('axios');
 const { db } = require('../db');
 const { getNextSpecialId, parseClassPayload } = require('../utils');
 
@@ -618,6 +619,236 @@ router.post(
     }
   }
 );
+
+// Google Sheets'ten veri çekme ve senkronizasyon
+router.post('/sync-from-sheets', async (req, res) => {
+  try {
+    const { sheetsUrl, updateOnly = false } = req.body;
+
+    if (!sheetsUrl || typeof sheetsUrl !== 'string') {
+      res.status(400).json({ message: 'Google Sheets URL is required.' });
+      return;
+    }
+
+    // Google Sheets URL'ini CSV export URL'ine dönüştür
+    let csvUrl = sheetsUrl.trim();
+    
+    // Eğer normal Google Sheets URL'i ise, CSV export URL'ine dönüştür
+    const sheetIdMatch = csvUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (sheetIdMatch) {
+      const sheetId = sheetIdMatch[1];
+      // GID parametresini kontrol et (varsayılan 0)
+      const gidMatch = csvUrl.match(/[#&]gid=(\d+)/);
+      const gid = gidMatch ? gidMatch[1] : '0';
+      csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+    } else if (!csvUrl.includes('/export?format=csv')) {
+      // Eğer zaten CSV export URL'i değilse ve sheet ID de yoksa hata ver
+      res.status(400).json({ 
+        message: 'Invalid Google Sheets URL. Please provide a valid Google Sheets URL or CSV export URL.' 
+      });
+      return;
+    }
+
+    // CSV verisini çek
+    const response = await axios.get(csvUrl, {
+      responseType: 'text',
+      timeout: 30000, // 30 saniye timeout
+    });
+
+    if (!response.data || response.data.trim().length === 0) {
+      res.status(400).json({ message: 'Google Sheets is empty or could not be accessed.' });
+      return;
+    }
+
+    // CSV'yi parse et
+    const workbook = XLSX.read(response.data, { type: 'string' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    if (!rows.length) {
+      res.status(400).json({ message: 'Google Sheets has no data rows.' });
+      return;
+    }
+
+    const insertStmt = db.prepare(`
+      INSERT INTO classes (
+        special_id,
+        main_category,
+        quality,
+        class_name,
+        class_name_ar,
+        class_name_en,
+        class_features,
+        class_price,
+        class_weight,
+        class_quantity,
+        class_video
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const updateStmt = db.prepare(`
+      UPDATE classes
+      SET main_category = ?,
+          quality = ?,
+          class_name = ?,
+          class_name_ar = ?,
+          class_name_en = ?,
+          class_features = ?,
+          class_price = ?,
+          class_weight = ?,
+          class_quantity = ?,
+          class_video = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE special_id = ?
+    `);
+
+    const processed = [];
+    const skipped = [];
+    let pendingOperations = 0;
+
+    return new Promise((resolve) => {
+      db.serialize(() => {
+        rows.forEach((row, index) => {
+          const record = {
+            specialId: row['Special ID'] || row['special_id'] || row['Special ID'] || row['specialId'],
+            mainCategory: row['Main Category'] || row['main_category'] || row['Main Category'] || row['mainCategory'],
+            quality: row['Group'] || row['group'] || row['Quality'] || row['quality'],
+            className: row['Class Name'] || row['class_name'] || row['Class Name'] || row['className'],
+            classNameArabic: row['Class Name Arabic'] || row['class_name_ar'] || row['Class Name Arabic'] || row['classNameArabic'],
+            classNameEnglish: row['Class Name English'] || row['class_name_en'] || row['Class Name English'] || row['classNameEnglish'],
+            classFeatures: row['Class Features'] || row['class_features'] || row['Class Features'] || row['classFeatures'],
+            classPrice: row['Class Price'] || row['class_price'] || row['Class Price'] || row['classPrice'],
+            classWeight: row['Class KG'] || row['class_weight'] || row['Class Weight'] || row['classWeight'],
+            classQuantity: row['Class Quantity'] || row['class_quantity'] || row['Quantity'] || row['quantity'] || row['classQuantity'],
+            classVideo: row['Class Video'] || row['class_video'] || row['Class Video'] || row['classVideo'],
+          };
+
+          try {
+            const parsed = parseClassPayload(record, { classVideo: record.classVideo || null });
+
+            if (!parsed.specialId) {
+              skipped.push({ index: index + 2, reason: 'Special ID is required.' });
+              return;
+            }
+
+            const priceValue = parsed.classPrice;
+            const weightValue = parsed.classWeight;
+            const quantityValue = parsed.classQuantity;
+            const specialIdValue = parsed.specialId;
+
+            pendingOperations += 1;
+
+            // Check if record exists
+            db.get('SELECT id, class_name, class_video FROM classes WHERE special_id = ?', [specialIdValue], (getErr, existing) => {
+              if (getErr) {
+                skipped.push({ index: index + 2, reason: `Database error: ${getErr.message}` });
+                pendingOperations -= 1;
+                if (pendingOperations === 0) {
+                  insertStmt.finalize();
+                  updateStmt.finalize();
+                  resolve();
+                }
+                return;
+              }
+
+              const operationCallback = (err) => {
+                pendingOperations -= 1;
+                if (err) {
+                  skipped.push({ index: index + 2, reason: err.message });
+                } else {
+                  processed.push({ ...parsed, action: existing ? 'updated' : 'created' });
+                }
+
+                if (pendingOperations === 0) {
+                  insertStmt.finalize();
+                  updateStmt.finalize();
+                  resolve();
+                }
+              };
+
+              const classNameValue = parsed.className ?? '';
+              const videoValue = (parsed.classVideo && parsed.classVideo.trim().length > 0)
+                ? parsed.classVideo
+                : (existing?.class_video ?? null);
+
+              if (existing) {
+                // Update existing record
+                updateStmt.run(
+                  parsed.mainCategory ?? '',
+                  parsed.quality ?? '',
+                  classNameValue,
+                  parsed.classNameArabic ?? null,
+                  parsed.classNameEnglish ?? null,
+                  parsed.classFeatures ?? null,
+                  priceValue,
+                  weightValue,
+                  quantityValue,
+                  videoValue,
+                  specialIdValue,
+                  operationCallback
+                );
+              } else {
+                // Insert new record (only if updateOnly is false)
+                if (updateOnly) {
+                  skipped.push({ index: index + 2, reason: 'Record not found (update only mode).' });
+                  pendingOperations -= 1;
+                  if (pendingOperations === 0) {
+                    insertStmt.finalize();
+                    updateStmt.finalize();
+                    resolve();
+                  }
+                } else {
+                  insertStmt.run(
+                    specialIdValue,
+                    parsed.mainCategory ?? '',
+                    parsed.quality ?? '',
+                    classNameValue,
+                    parsed.classNameArabic || null,
+                    parsed.classNameEnglish || null,
+                    parsed.classFeatures || null,
+                    priceValue,
+                    weightValue,
+                    quantityValue,
+                    parsed.classVideo || null,
+                    operationCallback
+                  );
+                }
+              }
+            });
+          } catch (error) {
+            skipped.push({ index: index + 2, reason: error.message });
+          }
+        });
+
+        // Eğer hiç row yoksa hemen resolve et
+        if (rows.length === 0) {
+          insertStmt.finalize();
+          updateStmt.finalize();
+          resolve();
+        }
+      });
+    }).then(() => {
+      res.json({
+        success: true,
+        processedCount: processed.length,
+        skippedCount: skipped.length,
+        processed,
+        skipped,
+      });
+    }).catch((error) => {
+      res.status(500).json({ 
+        message: 'Failed to sync from Google Sheets', 
+        error: error.message 
+      });
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      message: 'Failed to sync from Google Sheets', 
+      error: error.message 
+    });
+  }
+});
 
 module.exports = router;
 

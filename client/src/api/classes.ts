@@ -45,3 +45,11 @@ export const bulkUploadClasses = async (formData: FormData): Promise<BulkUploadR
   return response.data;
 };
 
+export const syncFromGoogleSheets = async (sheetsUrl: string, updateOnly: boolean = false): Promise<BulkUploadResult> => {
+  const response = await apiClient.post<BulkUploadResult>('/api/classes/sync-from-sheets', {
+    sheetsUrl,
+    updateOnly,
+  });
+  return response.data;
+};
+

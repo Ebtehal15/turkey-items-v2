@@ -1930,6 +1930,14 @@ button.danger:hover:not(:disabled) {
   padding: 1.6rem;
 }
 
+.catalog-filters__header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  width: 100%;
+}
+
 .catalog-filters__header h2 {
   margin: 0;
   font-size: 1.4rem;
@@ -1940,6 +1948,76 @@ button.danger:hover:not(:disabled) {
 .catalog-filters__header p {
   margin: 0.45rem 0 0;
   color: #5b668f;
+}
+
+.catalog-filters__toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(208, 170, 27, 0.25);
+  position: relative;
+  min-width: 48px;
+  min-height: 48px;
+  flex-shrink: 0;
+}
+
+.catalog-filters__toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(208, 170, 27, 0.35);
+}
+
+.catalog-filters__toggle:active {
+  transform: translateY(0);
+}
+
+.catalog-filters__toggle svg {
+  flex-shrink: 0;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.catalog-filters__toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.catalog-filters__badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 10px;
+  min-width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0 0.35rem;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+  border: 2px solid #fff;
+}
+
+.catalog-filters__content {
+  overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+  max-height: 2000px;
+  opacity: 1;
+}
+
+.catalog-filters__content--visible {
+  max-height: 2000px;
+  opacity: 1;
 }
 
 .catalog-filters__grid {
@@ -1970,6 +2048,12 @@ button.danger:hover:not(:disabled) {
     0 2px 8px rgba(15, 23, 42, 0.04),
     0 1px 0 rgba(255, 255, 255, 0.9) inset;
   min-height: 48px;
+}
+
+.catalog-filters__grid input:not(:placeholder-shown),
+.catalog-filters__grid select:not([value=""]) {
+  border-color: rgba(208, 170, 27, 0.4);
+  background: #fffef5;
 }
 
 .catalog-filters__grid input:hover,
@@ -2018,6 +2102,12 @@ button.danger:hover:not(:disabled) {
   border-color: rgba(99, 102, 241, 0.4);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+}
+
+.catalog-filters__clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .catalog-table {
@@ -2864,8 +2954,8 @@ button.outline.small {
 .cart-qty-chip--table-mobile .cart-qty-chip__value {
     min-width: 16px;
     font-size: 0.45rem;
-    font-weight: 600;
-    color: #111827;
+  font-weight: 600;
+  color: #111827;
     letter-spacing: 0.02em;
     padding: 0 0.08rem;
   }
@@ -4640,6 +4730,15 @@ button.text.danger:hover {
       0 1px 0 rgba(255, 255, 255, 0.95) inset;
   }
 
+  .catalog-filters__header-content {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .catalog-filters__toggle {
+    display: flex;
+  }
+
   .catalog-filters__header h2 {
     font-size: 1.1rem;
   }
@@ -4647,6 +4746,20 @@ button.text.danger:hover {
   .catalog-filters__header p {
     font-size: 0.85rem;
     margin-top: 0.25rem;
+  }
+
+  .catalog-filters:not(.catalog-filters--expanded) .catalog-filters__content {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    margin-top: 0;
+  }
+
+  .catalog-filters__content--visible,
+  .catalog-filters--expanded .catalog-filters__content {
+    max-height: 2000px;
+    opacity: 1;
+    margin-top: 1.25rem;
   }
 
   .catalog-table__header h2 {
@@ -4846,10 +4959,16 @@ button.text.danger:hover {
   .catalog-filters__actions {
     flex-direction: column;
     width: 100%;
+    margin-top: 1.25rem;
   }
 
   .catalog-filters__actions button {
     width: 100%;
+  }
+
+  .catalog-filters__clear {
+    width: 100%;
+    justify-content: center;
   }
 
   .catalog-card-grid {

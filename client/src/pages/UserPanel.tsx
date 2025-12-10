@@ -43,11 +43,11 @@ const getInitialViewMode = (): ViewMode => {
 };
 
 const CartIconGlyph = () => (
-    <svg
-      className="cart-icon-trigger__icon"
+  <svg
+    className="cart-icon-trigger__icon"
       width="24"
       height="24"
-      viewBox="0 0 24 24"
+    viewBox="0 0 24 24"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden="true"
@@ -73,6 +73,7 @@ const UserPanel = () => {
   const [userHasSelected, setUserHasSelected] = useState(false);
   const [expandedControls, setExpandedControls] = useState<Record<number, boolean>>({});
   const [isMobileView, setIsMobileView] = useState<boolean>(() => (isBrowser ? window.innerWidth <= 600 : false));
+  const [filtersExpanded, setFiltersExpanded] = useState<boolean>(false);
   const { data: allClasses = [] } = useClasses();
   const { data: classes = [], isLoading, error } = useClasses(filters);
   const { language, t } = useTranslate();
@@ -265,54 +266,95 @@ const UserPanel = () => {
     setFilters({});
   };
 
+  // Count active filters
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.classNameSearch) count++;
+    if (filters.codeSearch) count++;
+    if (filters.quality) count++;
+    return count;
+  }, [filters]);
+
+  // Auto-expand filters on mobile if there are active filters
+  useEffect(() => {
+    if (isMobileView && activeFilterCount > 0 && !filtersExpanded) {
+      setFiltersExpanded(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobileView, activeFilterCount]);
+
   return (
     <section className="panel catalog-panel">
-      <div className="card catalog-filters">
+      <div className={`card catalog-filters ${filtersExpanded || !isMobileView ? 'catalog-filters--expanded' : ''}`}>
         <div className="catalog-filters__header">
-          <h2>{t('Search & Filters', 'البحث والتصفية', 'Búsqueda y Filtros')}</h2>
-          <p>{t('Use flexible filters to focus on the categories and groups that fit the brief.', 'استخدم خيارات التصفية للتركيز على الفئات المناسبة.', 'Utiliza filtros flexibles para enfocarte en las categorías y grupos adecuados.')}</p>
+          <div className="catalog-filters__header-content">
+            <div>
+              <h2>{t('Search & Filters', 'البحث والتصفية', 'Búsqueda y Filtros')}</h2>
+              <p>{t('Use flexible filters to focus on the categories and groups that fit the brief.', 'استخدم خيارات التصفية للتركيز على الفئات المناسبة.', 'Utiliza filtros flexibles para enfocarte en las categorías y grupos adecuados.')}</p>
+            </div>
+            {isMobileView && (
+              <button
+                type="button"
+                className="catalog-filters__toggle"
+                onClick={() => setFiltersExpanded(!filtersExpanded)}
+                aria-expanded={filtersExpanded}
+                aria-label={filtersExpanded ? t('Hide filters', 'إخفاء الفلاتر', 'Ocultar filtros') : t('Show filters', 'إظهار الفلاتر', 'Mostrar filtros')}
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
-        <div className="catalog-filters__grid">
-          <label>
-            {t('Class Name', 'اسم الصنف', 'Nombre del producto')}
-            <input
-              type="search"
-              name="classNameSearch"
-              value={filters.classNameSearch ?? ''}
-              onChange={handleFilterChange}
-              placeholder={t('Search by class name', 'ابحث باسم الصنف', 'Buscar por nombre del producto')}
-            />
-          </label>
+        <div className={`catalog-filters__content ${filtersExpanded || !isMobileView ? 'catalog-filters__content--visible' : ''}`}>
+          <div className="catalog-filters__grid">
+            <label>
+              {t('Class Name', 'اسم الصنف', 'Nombre del producto')}
+              <input
+                type="search"
+                name="classNameSearch"
+                value={filters.classNameSearch ?? ''}
+                onChange={handleFilterChange}
+                placeholder={t('Search by class name', 'ابحث باسم الصنف', 'Buscar por nombre del producto')}
+              />
+            </label>
 
-          <label>
-            {t('Code', 'الرمز', 'Código')}
-            <input
-              type="search"
-              name="codeSearch"
-              value={filters.codeSearch ?? ''}
-              onChange={handleFilterChange}
-              placeholder={t('Search by code', 'ابحث بالرمز', 'Buscar por código')}
-            />
-          </label>
+            <label>
+              {t('Code', 'الرمز', 'Código')}
+              <input
+                type="search"
+                name="codeSearch"
+                value={filters.codeSearch ?? ''}
+                onChange={handleFilterChange}
+                placeholder={t('Search by code', 'ابحث بالرمز', 'Buscar por código')}
+              />
+            </label>
 
-          <label>
-            {t('Group', 'المجموعة', 'Grupo')}
-            <select
-              name="quality"
-              value={filters.quality ?? ''}
-              onChange={handleFilterChange}
-            >
-              <option value="">{t('All', 'الكل', 'Todos')}</option>
-              {groups.map((group) => (
-                <option key={group} value={group}>{group}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="catalog-filters__actions">
-          <button type="button" className="secondary" onClick={handleClearFilters}>
-            {t('Clear Filters', 'إزالة الفلترة', 'Limpiar filtros')}
-          </button>
+            <label>
+              {t('Group', 'المجموعة', 'Grupo')}
+              <select
+                name="quality"
+                value={filters.quality ?? ''}
+                onChange={handleFilterChange}
+              >
+                <option value="">{t('All', 'الكل', 'Todos')}</option>
+                {groups.map((group) => (
+                  <option key={group} value={group}>{group}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="catalog-filters__actions">
+            {activeFilterCount > 0 && (
+              <button type="button" className="secondary catalog-filters__clear" onClick={handleClearFilters}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+                {t('Clear Filters', 'إزالة الفلترة', 'Limpiar filtros')}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -551,7 +593,7 @@ const UserPanel = () => {
                           <span className="card-cart-value">
                             {quantity === 0
                               ? isMobileView
-                                ? t('Add to cart', 'أضف إلى السلة', 'Añadir al carrito')
+                              ? t('Add to cart', 'أضف إلى السلة', 'Añadir al carrito')
                                 : '0'
                               : quantity}
                           </span>

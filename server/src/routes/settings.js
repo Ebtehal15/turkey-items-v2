@@ -85,6 +85,85 @@ router.put('/columns', (req, res) => {
   );
 });
 
+// Google Sheets URL ayarları
+const GOOGLE_SHEETS_URL_KEY = 'google_sheets_url';
+const GOOGLE_SHEETS_AUTO_SYNC_KEY = 'google_sheets_auto_sync';
+
+router.get('/google-sheets', (_req, res) => {
+  db.get('SELECT value FROM settings WHERE key = ?', [GOOGLE_SHEETS_URL_KEY], (err, urlRow) => {
+    if (err) {
+      res.status(500).json({ message: 'Failed to load Google Sheets URL', error: err.message });
+      return;
+    }
+
+    db.get('SELECT value FROM settings WHERE key = ?', [GOOGLE_SHEETS_AUTO_SYNC_KEY], (err2, syncRow) => {
+      if (err2) {
+        res.status(500).json({ message: 'Failed to load auto sync setting', error: err2.message });
+        return;
+      }
+
+      res.json({
+        url: urlRow?.value || '',
+        autoSync: syncRow?.value === 'true',
+      });
+    });
+  });
+});
+
+router.put('/google-sheets', (req, res) => {
+  const { url, autoSync } = req.body || {};
+
+  if (url !== undefined && typeof url !== 'string') {
+    res.status(400).json({ message: 'Invalid payload. Expected "url" as string.' });
+    return;
+  }
+
+  if (autoSync !== undefined && typeof autoSync !== 'boolean') {
+    res.status(400).json({ message: 'Invalid payload. Expected "autoSync" as boolean.' });
+    return;
+  }
+
+  const operations = [];
+
+  if (url !== undefined) {
+    operations.push(
+      new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+          [GOOGLE_SHEETS_URL_KEY, url],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      })
+    );
+  }
+
+  if (autoSync !== undefined) {
+    operations.push(
+      new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+          [GOOGLE_SHEETS_AUTO_SYNC_KEY, String(autoSync)],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      })
+    );
+  }
+
+  Promise.all(operations)
+    .then(() => {
+      res.json({ success: true, url, autoSync });
+    })
+    .catch((err) => {
+      res.status(500).json({ message: 'Failed to update Google Sheets settings', error: err.message });
+    });
+});
+
 module.exports = {
   router,
   DEFAULT_VISIBILITY,

@@ -117,10 +117,10 @@ const CartSummary = () => {
       ">
         <div
           style="
-            display: flex;
+          display: flex;
             align-items: flex-start;
-            justify-content: space-between;
-            margin-bottom: 20px;
+          justify-content: space-between;
+          margin-bottom: 20px;
             direction: ltr;
           "
         >
@@ -156,7 +156,7 @@ const CartSummary = () => {
             </h1>
             <p
               style="
-                margin: 0;
+            margin: 0;
                 color: #0f172a;
                 font-size: 17px;
                 font-weight: 600;
@@ -179,8 +179,8 @@ const CartSummary = () => {
               style="
                 font-size: 20px;
                 margin: 0 0 4px 0;
-                color: #0f172a;
-                font-weight: bold;
+            color: #0f172a;
+            font-weight: bold;
               "
             >
               ${t('Order Form', 'نموذج الطلب', 'Formulario de pedido')}
@@ -200,9 +200,9 @@ const CartSummary = () => {
             style="
               flex: 1;
               text-align: right;
-              color: #0f172a;
+            color: #0f172a;
               font-size: 14px;
-              font-weight: bold;
+            font-weight: bold;
             "
           >
             ${formattedDate} - ${formattedTime}
@@ -226,7 +226,7 @@ const CartSummary = () => {
             border-radius: 4px;
             overflow: hidden;
           ">
-                 <thead>
+            <thead>
               <tr style="background: #0f172a; color: white;">
                      <th style="padding: 6px 4px; text-align: ${pdfLanguage === 'ar' ? 'right' : 'left'}; font-size: 13px; font-weight: bold;">${t('Code', 'الرمز', 'Código')}</th>
                      <th style="padding: 6px 4px; text-align: ${pdfLanguage === 'ar' ? 'right' : 'left'}; font-size: 13px; font-weight: bold;">${t('Group', 'المجموعة', 'Grupo')}</th>
@@ -246,7 +246,7 @@ const CartSummary = () => {
                 const unitPrice = record.classPrice ?? 0;
                 const subtotal = record.classPrice ? record.classPrice * quantity : 0;
                 return `
-                       <tr style="border-bottom: 1px solid #e5e7eb; ${index % 2 === 0 ? 'background: #f9fafb;' : 'background: white;'}">
+                  <tr style="border-bottom: 1px solid #e5e7eb; ${index % 2 === 0 ? 'background: #f9fafb;' : 'background: white;'}">
                          <td style="padding: 4px 6px; text-align: ${pdfLanguage === 'ar' ? 'right' : 'left'}; font-size: 12px;">${record.specialId}</td>
                          <td style="padding: 4px 6px; text-align: ${pdfLanguage === 'ar' ? 'right' : 'left'}; font-size: 12px;">${record.quality || t('N/A', 'غير متوفر', 'No disponible')}</td>
                          <td style="padding: 4px 6px; text-align: ${pdfLanguage === 'ar' ? 'right' : 'left'}; font-size: 12px;">${name}</td>
@@ -274,10 +274,10 @@ const CartSummary = () => {
           border-radius: 2px;
           margin-top: 15px;
         ">
-               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                  <strong style="font-size: 17px; color: #0f172a;">${t('Order total', 'إجمالي الطلب', 'Total del pedido')}:</strong>
                  <strong style="font-size: 17px; color: #059669;">$${formatCurrency(pdfKnownTotal)}</strong>
-               </div>
+          </div>
                <p style="font-size: 14px; color: #0f172a; margin: 0;"><strong>${t('Total items', 'إجمالي العناصر', 'Total de artículos')}:</strong> ${pdfTotalItems}</p>
                ${pdfHasUnknownPrices ? `
             <p style="color: #d97706; margin-top: 8px; font-size: 13px; margin-bottom: 0;">
@@ -365,7 +365,7 @@ const CartSummary = () => {
     // Immediately show loading state for instant feedback
     setFormError(null);
     setIsGenerating(true);
-    
+
     // Use setTimeout to ensure UI updates immediately
     setTimeout(async () => {
       try {
@@ -419,12 +419,12 @@ const CartSummary = () => {
       setShowPdfPreview(true);
       setShowShareOptions(true);
       setIsGenerating(false);
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to generate PDF', error);
-        setFormError(t('Failed to generate PDF. Please try again.', 'تعذر إنشاء ملف PDF. يرجى المحاولة مرة أخرى.', 'No se pudo generar el PDF. Inténtalo de nuevo.'));
-        setIsGenerating(false);
-      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to generate PDF', error);
+      setFormError(t('Failed to generate PDF. Please try again.', 'تعذر إنشاء ملف PDF. يرجى المحاولة مرة أخرى.', 'No se pudo generar el PDF. Inténtalo de nuevo.'));
+      setIsGenerating(false);
+    }
     }, 0);
   };
 
@@ -856,8 +856,8 @@ const CartSummary = () => {
                 </button>
               </div>
             </div>
+            </div>
           </div>
-        </div>
       )}
 
       {/* Info Popup Modal */}
