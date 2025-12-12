@@ -5,6 +5,7 @@ import { useCart } from '../context/CartContext';
 import useTranslate from '../hooks/useTranslate';
 import apiClient from '../api/client';
 import { addOrderToHistory, type OrderHistoryItem } from '../utils/orderHistory';
+import { createOrder } from '../api/orders';
 
 const formatCurrency = (value: number) => {
   if (Number.isNaN(value)) {
@@ -399,7 +400,17 @@ const CartSummary = () => {
           hasUnknownPrices,
           language,
         };
+        
+        // LocalStorage'a kaydet (local history için)
         addOrderToHistory(historyEntry);
+        
+        // Backend'e kaydet (tüm cihazlardan erişilebilir olması için)
+        try {
+          await createOrder(historyEntry);
+        } catch (error) {
+          // Backend'e kaydetme hatası kritik değil, sadece log'la
+          console.error('Failed to save order to backend:', error);
+        }
         
         // Download the PDF first
         const fileName = `order-form-${orderId}.pdf`;

@@ -7,6 +7,7 @@ const { initializeDatabase } = require('./db');
 const classesRouter = require('./routes/classes');
 const { router: settingsRouter } = require('./routes/settings');
 const cartRouter = require('./routes/cart');
+const ordersRouter = require('./routes/orders');
 
 // 🔹 Veritabanını başlat
 initializeDatabase();
@@ -94,6 +95,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/classes', classesRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/cart', cartRouter);
+app.use('/api/orders', ordersRouter);
 
 // ✅ Sunucuyu başlat
 const port = process.env.PORT || 4000;

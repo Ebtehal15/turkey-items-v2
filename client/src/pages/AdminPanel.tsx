@@ -13,6 +13,10 @@ import {
   generateSpecialId,
   updateClass,
   syncFromGoogleSheets,
+  fetchPriceHistory,
+  fetchRecentPriceChanges,
+  type PriceHistoryItem,
+  type PriceChangeItem,
 } from '../api/classes';
 import { CLASSES_QUERY_KEY, useClasses } from '../hooks/useClasses';
 import type { BulkUploadResult, ClassFilters, ClassRecord, ColumnVisibility, ColumnKey } from '../types';
@@ -27,6 +31,7 @@ import {
 import { fetchColumnVisibility, updateColumnVisibility, fetchGoogleSheetsSettings, updateGoogleSheetsSettings } from '../api/settings';
 import useTranslate from '../hooks/useTranslate';
 import { getOrderHistory, deleteOrderFromHistory, type OrderHistoryItem } from '../utils/orderHistory';
+import { fetchAllOrders, deleteOrder, type OrderResponse } from '../api/orders';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 
   (import.meta.env.PROD ? 'https://cillii.onrender.com' : 'http://localhost:4000');
@@ -105,6 +110,8 @@ const AdminPanel = () => {
     return false;
   });
   const [isSyncing, setIsSyncing] = useState(false);
+  const [priceHistoryModal, setPriceHistoryModal] = useState<{ classId: number; className: string } | null>(null);
+  const [showPriceChanges, setShowPriceChanges] = useState(false);
 
   const queryClient = useQueryClient();
   const { data: allClasses = [] } = useClasses({ includeZeroQuantity: true });
@@ -157,10 +164,26 @@ const AdminPanel = () => {
     }
   }, [videoPreview]);
 
-  // Load order history
+  // Load order history from backend
+  const { data: backendOrders = [], isLoading: isLoadingOrders, refetch: refetchOrders } = useQuery<OrderResponse[]>({
+    queryKey: ['allOrders'],
+    queryFn: () => fetchAllOrders(500),
+  });
+
+  // Convert backend orders to OrderHistoryItem format for compatibility
   useEffect(() => {
-    setOrderHistory(getOrderHistory());
-  }, []);
+    const convertedOrders: OrderHistoryItem[] = backendOrders.map((order) => ({
+      orderId: order.orderId,
+      createdAt: order.createdAt,
+      customerInfo: order.customerInfo,
+      items: order.items,
+      knownTotal: order.knownTotal,
+      totalItems: order.totalItems,
+      hasUnknownPrices: order.hasUnknownPrices,
+      language: order.language,
+    }));
+    setOrderHistory(convertedOrders);
+  }, [backendOrders]);
 
   // Load Google Sheets settings
   const googleSheetsQuery = useQuery({
@@ -874,16 +897,24 @@ const AdminPanel = () => {
     }
   };
 
-  const handleDeleteOrder = (orderId: number) => {
+  const handleDeleteOrder = async (orderId: number) => {
     const message = t(
-      'Delete this order from history? This action cannot be undone.',
-      'حذف هذا الطلب من السجل؟ لا يمكن التراجع عن هذا الإجراء.',
-      '¿Eliminar este pedido del historial? Esta acción no se puede deshacer.',
+      'Delete this order? This action cannot be undone.',
+      'حذف هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء.',
+      '¿Eliminar este pedido? Esta acción no se puede deshacer.',
     );
     if (window.confirm(message)) {
-      deleteOrderFromHistory(orderId);
-      setOrderHistory(getOrderHistory());
-      setFeedback(t('Order deleted from history.', 'تم حذف الطلب من السجل.', 'Pedido eliminado del historial.'));
+      try {
+        // Backend'den sil
+        await deleteOrder(orderId);
+        // LocalStorage'dan da sil (eğer varsa)
+        deleteOrderFromHistory(orderId);
+        // Listeyi yenile
+        await refetchOrders();
+        setFeedback(t('Order deleted successfully.', 'تم حذف الطلب بنجاح.', 'Pedido eliminado exitosamente.'));
+      } catch (error) {
+        setErrorFeedback(t('Failed to delete order.', 'تعذر حذف الطلب.', 'No se pudo eliminar el pedido.'));
+      }
     }
   };
 
@@ -1833,6 +1864,21 @@ const AdminPanel = () => {
                         </button>
                         <button
                           type="button"
+                          className="secondary"
+                          onClick={() => {
+                            const localizedName = (() => {
+                              if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
+                              if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
+                              return item.className;
+                            })();
+                            setPriceHistoryModal({ classId: item.id, className: localizedName });
+                          }}
+                          title={t('Price History', 'سجل الأسعار', 'Historial de Precios')}
+                        >
+                          💰
+                        </button>
+                        <button
+                          type="button"
                           className="danger"
                           onClick={() => handleDelete(item)}
                           disabled={deleteMutation.isPending}
@@ -2032,12 +2078,38 @@ const AdminPanel = () => {
           )}
         </div>
 
+        {/* Price Changes Section */}
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div>
+              <h2>{t('Recent Price Changes', 'التغييرات الأخيرة في الأسعار', 'Cambios Recientes de Precios')}</h2>
+              <p>{t('View all products that have had price changes recently.', 'عرض جميع المنتجات التي تغيرت أسعارها مؤخراً.', 'Ver todos los productos que han tenido cambios de precio recientemente.')}</p>
+            </div>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                setShowPriceChanges(!showPriceChanges);
+                if (!showPriceChanges) {
+                  queryClient.invalidateQueries({ queryKey: ['recentPriceChanges'] });
+                }
+              }}
+            >
+              {showPriceChanges ? t('Hide', 'إخفاء', 'Ocultar') : t('Show', 'عرض', 'Mostrar')}
+            </button>
+          </div>
+
+          {showPriceChanges && (
+            <PriceChangesList />
+          )}
+        </div>
+
         {/* Order History Section */}
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <div>
-              <h2>{t('Order History', 'سجل الطلبات', 'Historial de Pedidos')}</h2>
-              <p>{t('View and manage previous order forms created on this device.', 'عرض وإدارة نماذج الطلبات السابقة التي تم إنشاؤها على هذا الجهاز.', 'Ver y gestionar formularios de pedidos anteriores creados en este dispositivo.')}</p>
+              <h2>{t('All Orders', 'جميع الطلبات', 'Todos los Pedidos')}</h2>
+              <p>{t('View and manage all order forms from all devices.', 'عرض وإدارة جميع نماذج الطلبات من جميع الأجهزة.', 'Ver y gestionar todos los formularios de pedidos de todos los dispositivos.')}</p>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               {showOrderHistory && orderHistory.length > 0 && (
@@ -2052,10 +2124,10 @@ const AdminPanel = () => {
               <button
                 type="button"
                 className="secondary"
-                onClick={() => {
+                onClick={async () => {
                   setShowOrderHistory(!showOrderHistory);
                   if (!showOrderHistory) {
-                    setOrderHistory(getOrderHistory());
+                    await refetchOrders();
                   }
                 }}
               >
@@ -2066,8 +2138,12 @@ const AdminPanel = () => {
 
           {showOrderHistory && (
             <>
-              {orderHistory.length === 0 ? (
-                <p>{t('No orders found in history.', 'لا توجد طلبات في السجل.', 'No se encontraron pedidos en el historial.')}</p>
+              {isLoadingOrders ? (
+                <div style={{ textAlign: 'center', padding: '2rem' }}>
+                  <p>{t('Loading orders...', 'جاري تحميل الطلبات...', 'Cargando pedidos...')}</p>
+                </div>
+              ) : orderHistory.length === 0 ? (
+                <p>{t('No orders found.', 'لا توجد طلبات.', 'No se encontraron pedidos.')}</p>
               ) : (
                 <div className="admin-order-history">
                   <ul className="admin-order-history__list">
@@ -2127,7 +2203,320 @@ const AdminPanel = () => {
           )}
         </div>
       </div>
+
+      {/* Price History Modal */}
+      {priceHistoryModal && (
+        <PriceHistoryModal
+          classId={priceHistoryModal.classId}
+          className={priceHistoryModal.className}
+          onClose={() => setPriceHistoryModal(null)}
+        />
+      )}
+
+      {/* Listen for price history open events from PriceChangesList */}
+      <PriceHistoryEventListener setPriceHistoryModal={setPriceHistoryModal} />
     </section>
+  );
+};
+
+// Component to handle price history events
+const PriceHistoryEventListener = ({ setPriceHistoryModal }: { setPriceHistoryModal: (modal: { classId: number; className: string } | null) => void }) => {
+  useEffect(() => {
+    const handleOpenPriceHistory = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      setPriceHistoryModal({ classId: customEvent.detail.classId, className: customEvent.detail.className });
+    };
+    window.addEventListener('openPriceHistory', handleOpenPriceHistory);
+    return () => {
+      window.removeEventListener('openPriceHistory', handleOpenPriceHistory);
+    };
+  }, [setPriceHistoryModal]);
+  return null;
+};
+
+// Price History Modal Component
+const PriceHistoryModal = ({ classId, className, onClose }: { classId: number; className: string; onClose: () => void }) => {
+  const { language, t } = useTranslate();
+  const { data: priceHistory = [], isLoading, error } = useQuery<PriceHistoryItem[]>({
+    queryKey: ['priceHistory', classId],
+    queryFn: () => fetchPriceHistory(classId),
+  });
+
+  const formatCurrency = (value: number | null) => {
+    if (value === null || value === undefined) {
+      return t('N/A', 'غير متوفر', 'N/A');
+    }
+    return new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString(language === 'ar' ? 'ar-SA' : language === 'en' ? 'en-US' : 'es-ES', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  return (
+    <div className="form-modal-overlay" onClick={onClose}>
+      <div className="form-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px' }}>
+        <div className="form-modal__header">
+          <h2>
+            {t('Price History', 'سجل الأسعار', 'Historial de Precios')} - {className}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="form-modal__close"
+            aria-label={t('Close', 'إغلاق', 'Cerrar')}
+            title={t('Close', 'إغلاق', 'Cerrar')}
+          >
+            ×
+          </button>
+        </div>
+        <div className="form-modal__content">
+          {isLoading && (
+            <div style={{ textAlign: 'center', padding: '2rem' }}>
+              <p>{t('Loading price history...', 'جاري تحميل سجل الأسعار...', 'Cargando historial de precios...')}</p>
+            </div>
+          )}
+          {error && (
+            <div className="alert alert--error">
+              {t('Failed to load price history.', 'تعذر تحميل سجل الأسعار.', 'No se pudo cargar el historial de precios.')}
+            </div>
+          )}
+          {!isLoading && !error && priceHistory.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '2rem' }}>
+              <p>{t('No price history available.', 'لا يوجد سجل أسعار متاح.', 'No hay historial de precios disponible.')}</p>
+            </div>
+          )}
+          {!isLoading && !error && priceHistory.length > 0 && (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#0f172a', color: 'white' }}>
+                    <th style={{ padding: '10px', textAlign: language === 'ar' ? 'right' : 'left', fontSize: '14px' }}>
+                      {t('Date', 'التاريخ', 'Fecha')}
+                    </th>
+                    <th style={{ padding: '10px', textAlign: language === 'ar' ? 'left' : 'right', fontSize: '14px' }}>
+                      {t('Old Price', 'السعر القديم', 'Precio Anterior')}
+                    </th>
+                    <th style={{ padding: '10px', textAlign: 'center', fontSize: '14px' }}>→</th>
+                    <th style={{ padding: '10px', textAlign: language === 'ar' ? 'left' : 'right', fontSize: '14px' }}>
+                      {t('New Price', 'السعر الجديد', 'Precio Nuevo')}
+                    </th>
+                    <th style={{ padding: '10px', textAlign: language === 'ar' ? 'left' : 'right', fontSize: '14px' }}>
+                      {t('Change', 'التغيير', 'Cambio')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {priceHistory.map((item, index) => {
+                    const oldPrice = item.oldPrice ?? 0;
+                    const newPrice = item.newPrice ?? 0;
+                    const change = newPrice - oldPrice;
+                    const changePercent = oldPrice !== 0 ? ((change / oldPrice) * 100) : 0;
+                    const isIncrease = change > 0;
+                    const isDecrease = change < 0;
+
+                    return (
+                      <tr
+                        key={item.id}
+                        style={{
+                          borderBottom: '1px solid #e5e7eb',
+                          background: index % 2 === 0 ? '#f9fafb' : 'white',
+                        }}
+                      >
+                        <td style={{ padding: '10px', fontSize: '13px' }}>{formatDate(item.changedAt)}</td>
+                        <td style={{ padding: '10px', textAlign: language === 'ar' ? 'left' : 'right', fontSize: '13px' }}>
+                          {`$${formatCurrency(item.oldPrice)}`}
+                        </td>
+                        <td style={{ padding: '10px', textAlign: 'center', fontSize: '16px' }}>→</td>
+                        <td style={{ padding: '10px', textAlign: language === 'ar' ? 'left' : 'right', fontSize: '13px', fontWeight: 'bold' }}>
+                          {`$${formatCurrency(item.newPrice)}`}
+                        </td>
+                        <td
+                          style={{
+                            padding: '10px',
+                            textAlign: language === 'ar' ? 'left' : 'right',
+                            fontSize: '13px',
+                            color: isIncrease ? '#059669' : isDecrease ? '#dc2626' : '#64748b',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          {isIncrease ? '+' : ''}{`$${formatCurrency(change)}`} ({isIncrease ? '+' : ''}{changePercent.toFixed(1)}%)
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="form-modal__actions">
+          <button type="button" className="secondary" onClick={onClose}>
+            {t('Close', 'إغلاق', 'Cerrar')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Price Changes List Component
+const PriceChangesList = () => {
+  const { language, t } = useTranslate();
+  const { data: priceChanges = [], isLoading, error } = useQuery<PriceChangeItem[]>({
+    queryKey: ['recentPriceChanges'],
+    queryFn: () => fetchRecentPriceChanges(100),
+  });
+
+  const formatCurrency = (value: number | null) => {
+    if (value === null || value === undefined) {
+      return t('N/A', 'غير متوفر', 'N/A');
+    }
+    return new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString(language === 'ar' ? 'ar-SA' : language === 'en' ? 'en-US' : 'es-ES', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <p>{t('Loading price changes...', 'جاري تحميل تغييرات الأسعار...', 'Cargando cambios de precios...')}</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="alert alert--error">
+        {t('Failed to load price changes.', 'تعذر تحميل تغييرات الأسعار.', 'No se pudieron cargar los cambios de precios.')}
+      </div>
+    );
+  }
+
+  if (priceChanges.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <p>{t('No price changes found.', 'لا توجد تغييرات في الأسعار.', 'No se encontraron cambios de precios.')}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ background: '#0f172a', color: 'white' }}>
+            <th style={{ padding: '10px', textAlign: language === 'ar' ? 'right' : 'left', fontSize: '13px' }}>
+              {t('Date', 'التاريخ', 'Fecha')}
+            </th>
+            <th style={{ padding: '10px', textAlign: language === 'ar' ? 'right' : 'left', fontSize: '13px' }}>
+              {t('Code', 'الرمز', 'Código')}
+            </th>
+            <th style={{ padding: '10px', textAlign: language === 'ar' ? 'right' : 'left', fontSize: '13px' }}>
+              {t('Product Name', 'اسم المنتج', 'Nombre del Producto')}
+            </th>
+            <th style={{ padding: '10px', textAlign: language === 'ar' ? 'left' : 'right', fontSize: '13px' }}>
+              {t('Old Price', 'السعر القديم', 'Precio Anterior')}
+            </th>
+            <th style={{ padding: '10px', textAlign: 'center', fontSize: '13px' }}>→</th>
+            <th style={{ padding: '10px', textAlign: language === 'ar' ? 'left' : 'right', fontSize: '13px' }}>
+              {t('New Price', 'السعر الجديد', 'Precio Nuevo')}
+            </th>
+            <th style={{ padding: '10px', textAlign: language === 'ar' ? 'left' : 'right', fontSize: '13px' }}>
+              {t('Change', 'التغيير', 'Cambio')}
+            </th>
+            <th style={{ padding: '10px', textAlign: 'center', fontSize: '13px' }}>
+              {t('Actions', 'إجراءات', 'Acciones')}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {priceChanges.map((item, index) => {
+            const oldPrice = item.oldPrice ?? 0;
+            const newPrice = item.newPrice ?? 0;
+            const change = newPrice - oldPrice;
+            const changePercent = oldPrice !== 0 ? ((change / oldPrice) * 100) : 0;
+            const isIncrease = change > 0;
+            const isDecrease = change < 0;
+
+            const productName = (() => {
+              if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
+              if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
+              return item.className;
+            })();
+
+            return (
+              <tr
+                key={item.id}
+                style={{
+                  borderBottom: '1px solid #e5e7eb',
+                  background: index % 2 === 0 ? '#f9fafb' : 'white',
+                }}
+              >
+                <td style={{ padding: '10px', fontSize: '12px' }}>{formatDate(item.changedAt)}</td>
+                <td style={{ padding: '10px', fontSize: '12px', fontFamily: 'monospace' }}>{item.specialId}</td>
+                <td style={{ padding: '10px', fontSize: '12px' }}>{productName}</td>
+                <td style={{ padding: '10px', textAlign: language === 'ar' ? 'left' : 'right', fontSize: '12px' }}>
+                  {`$${formatCurrency(item.oldPrice)}`}
+                </td>
+                <td style={{ padding: '10px', textAlign: 'center', fontSize: '14px' }}>→</td>
+                <td style={{ padding: '10px', textAlign: language === 'ar' ? 'left' : 'right', fontSize: '12px', fontWeight: 'bold' }}>
+                  {`$${formatCurrency(item.newPrice)}`}
+                </td>
+                <td
+                  style={{
+                    padding: '10px',
+                    textAlign: language === 'ar' ? 'left' : 'right',
+                    fontSize: '12px',
+                    color: isIncrease ? '#059669' : isDecrease ? '#dc2626' : '#64748b',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {isIncrease ? '+' : ''}{`$${formatCurrency(change)}`} ({isIncrease ? '+' : ''}{changePercent.toFixed(1)}%)
+                </td>
+                <td style={{ padding: '10px', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      const event = new CustomEvent('openPriceHistory', { 
+                        detail: { classId: item.classId, className: productName } 
+                      });
+                      window.dispatchEvent(event);
+                    }}
+                    style={{ fontSize: '11px', padding: '4px 8px' }}
+                  >
+                    {t('View History', 'عرض السجل', 'Ver Historial')}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 };
 

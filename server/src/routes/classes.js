@@ -284,6 +284,13 @@ router.put(
         `);
 
         const newSpecialId = payload.specialId || current.special_id;
+        const oldPrice = current.class_price;
+        const newPrice = payload.classPrice !== undefined ? payload.classPrice : current.class_price;
+
+        // Check if price changed and record it in price_history
+        const priceChanged = payload.classPrice !== undefined && 
+          (oldPrice !== newPrice) && 
+          (oldPrice !== null || newPrice !== null);
 
         updateStmt.run(
           newSpecialId,
@@ -293,7 +300,7 @@ router.put(
           payload.classNameArabic !== undefined ? payload.classNameArabic : current.class_name_ar,
           payload.classNameEnglish !== undefined ? payload.classNameEnglish : current.class_name_en,
           payload.classFeatures !== undefined ? payload.classFeatures : current.class_features,
-          payload.classPrice !== undefined ? payload.classPrice : current.class_price,
+          newPrice,
           payload.classWeight !== undefined ? payload.classWeight : current.class_weight,
           payload.classQuantity !== undefined ? payload.classQuantity : current.class_quantity,
           videoPath,
@@ -305,6 +312,20 @@ router.put(
               }
               res.status(500).json({ message: 'Failed to update class', error: updateErr.message });
               return;
+            }
+
+            // Record price change in history if price changed
+            if (priceChanged) {
+              const priceHistoryStmt = db.prepare(`
+                INSERT INTO price_history (class_id, old_price, new_price)
+                VALUES (?, ?, ?)
+              `);
+              priceHistoryStmt.run(id, oldPrice, newPrice, (historyErr) => {
+                if (historyErr) {
+                  console.error('Failed to record price history:', historyErr);
+                }
+                priceHistoryStmt.finalize();
+              });
             }
 
             const shouldRemoveOldVideo = (() => {
@@ -848,6 +869,79 @@ router.post('/sync-from-sheets', async (req, res) => {
       error: error.message 
     });
   }
+});
+
+// Get price history for a specific class
+router.get('/:id/price-history', (req, res) => {
+  const { id } = req.params;
+
+  db.all(
+    `SELECT 
+      id,
+      old_price,
+      new_price,
+      changed_at
+    FROM price_history
+    WHERE class_id = ?
+    ORDER BY changed_at DESC`,
+    [id],
+    (err, rows) => {
+      if (err) {
+        res.status(500).json({ message: 'Failed to retrieve price history', error: err.message });
+        return;
+      }
+      res.json(rows.map((row) => ({
+        id: row.id,
+        oldPrice: row.old_price,
+        newPrice: row.new_price,
+        changedAt: row.changed_at,
+      })));
+    }
+  );
+});
+
+// Get all products with recent price changes
+router.get('/price-changes/recent', (req, res) => {
+  const { limit = 50 } = req.query;
+
+  db.all(
+    `SELECT 
+      ph.id,
+      ph.class_id,
+      ph.old_price,
+      ph.new_price,
+      ph.changed_at,
+      c.special_id,
+      c.class_name,
+      c.class_name_ar,
+      c.class_name_en,
+      c.main_category,
+      c.quality
+    FROM price_history ph
+    INNER JOIN classes c ON ph.class_id = c.id
+    ORDER BY ph.changed_at DESC
+    LIMIT ?`,
+    [parseInt(limit, 10)],
+    (err, rows) => {
+      if (err) {
+        res.status(500).json({ message: 'Failed to retrieve price changes', error: err.message });
+        return;
+      }
+      res.json(rows.map((row) => ({
+        id: row.id,
+        classId: row.class_id,
+        specialId: row.special_id,
+        className: row.class_name,
+        classNameArabic: row.class_name_ar,
+        classNameEnglish: row.class_name_en,
+        mainCategory: row.main_category,
+        quality: row.quality,
+        oldPrice: row.old_price,
+        newPrice: row.new_price,
+        changedAt: row.changed_at,
+      })));
+    }
+  );
 });
 
 module.exports = router;

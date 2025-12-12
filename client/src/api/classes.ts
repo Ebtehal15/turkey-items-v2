@@ -53,3 +53,36 @@ export const syncFromGoogleSheets = async (sheetsUrl: string, updateOnly: boolea
   return response.data;
 };
 
+export interface PriceHistoryItem {
+  id: number;
+  oldPrice: number | null;
+  newPrice: number | null;
+  changedAt: string;
+}
+
+export interface PriceChangeItem {
+  id: number;
+  classId: number;
+  specialId: string;
+  className: string;
+  classNameArabic: string | null;
+  classNameEnglish: string | null;
+  mainCategory: string;
+  quality: string | null;
+  oldPrice: number | null;
+  newPrice: number | null;
+  changedAt: string;
+}
+
+export const fetchPriceHistory = async (classId: number): Promise<PriceHistoryItem[]> => {
+  const response = await apiClient.get<PriceHistoryItem[]>(`/api/classes/${classId}/price-history`);
+  return response.data;
+};
+
+export const fetchRecentPriceChanges = async (limit: number = 50): Promise<PriceChangeItem[]> => {
+  const response = await apiClient.get<PriceChangeItem[]>('/api/classes/price-changes/recent', {
+    params: { limit },
+  });
+  return response.data;
+};
+
