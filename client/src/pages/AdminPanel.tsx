@@ -295,10 +295,47 @@ const AdminPanel = () => {
   const classesWithVideo = useMemo(() => classes.filter((item) => item.classVideo), [classes]);
 
   const missingVideoClasses = useMemo(() => classes.filter((item) => !item.classVideo), [classes]);
-  const classesWithoutPrice = useMemo(() => classes.filter((item) => item.classPrice === null || item.classPrice === undefined), [classes]);
-  const classesWithoutArabic = useMemo(() => classes.filter((item) => !item.classNameArabic || item.classNameArabic.trim() === ''), [classes]);
-  const classesWithoutEnglish = useMemo(() => classes.filter((item) => !item.classNameEnglish || item.classNameEnglish.trim() === ''), [classes]);
-  const classesWithoutName = useMemo(() => classes.filter((item) => !item.className || item.className.trim() === ''), [classes]);
+  const classesWithoutPrice = useMemo(
+    () => classes.filter((item) => item.classPrice === null || item.classPrice === undefined),
+    [classes],
+  );
+  const classesWithoutArabic = useMemo(
+    () => classes.filter((item) => !item.classNameArabic || item.classNameArabic.trim() === ''),
+    [classes],
+  );
+  const classesWithoutEnglish = useMemo(
+    () => classes.filter((item) => !item.classNameEnglish || item.classNameEnglish.trim() === ''),
+    [classes],
+  );
+  const classesWithoutName = useMemo(
+    () => classes.filter((item) => !item.className || item.className.trim() === ''),
+    [classes],
+  );
+
+  const getDisplayNameForLanguage = (item: ClassRecord) => {
+    if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
+    if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
+    return item.className;
+  };
+
+  const handleCopyClassListAsText = (items: ClassRecord[]) => {
+    if (!items.length) return;
+
+    const text = items
+      .map((item) => item.specialId)
+      .join('\n');
+
+    // Best-effort copy; ignore failures silently
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {
+        // ignore
+      });
+    }
+  };
+
+  const handleCopyClassesWithoutPriceAsText = () => {
+    handleCopyClassListAsText(classesWithoutPrice);
+  };
   const activeColumnCount = useMemo(
     () => Object.values(columnVisibility).filter(Boolean).length,
     [columnVisibility],
@@ -1457,6 +1494,16 @@ const AdminPanel = () => {
               <span aria-hidden="true">−</span>
             </div>
             <div className="admin-stats__missing-panel">
+              <div className="admin-stats__missing-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => handleCopyClassListAsText(classesWithVideo)}
+                  aria-label={t('Copy IDs as text', 'نسخ الأكواد كنص', 'Copiar IDs como texto')}
+                >
+                  📋
+                </button>
+              </div>
               <ul>
                 {classesWithVideo.map((item) => (
                   <li 
@@ -1468,11 +1515,7 @@ const AdminPanel = () => {
                     style={{ cursor: 'pointer' }}
                   >
                     <span className="admin-stats__missing-name">
-                      {(() => {
-                        if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
-                        if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
-                        return item.className;
-                      })()}
+                      {getDisplayNameForLanguage(item)}
                     </span>
                     <span className="admin-stats__missing-id">{item.specialId}</span>
                   </li>
@@ -1496,6 +1539,16 @@ const AdminPanel = () => {
               <span aria-hidden="true">−</span>
             </div>
             <div className="admin-stats__missing-panel">
+              <div className="admin-stats__missing-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => handleCopyClassListAsText(missingVideoClasses)}
+                  aria-label={t('Copy IDs as text', 'نسخ الأكواد كنص', 'Copiar IDs como texto')}
+                >
+                  📋
+                </button>
+              </div>
               <ul>
                 {missingVideoClasses.map((item) => (
                   <li 
@@ -1507,11 +1560,7 @@ const AdminPanel = () => {
                     style={{ cursor: 'pointer' }}
                   >
                     <span className="admin-stats__missing-name">
-                      {(() => {
-                        if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
-                        if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
-                        return item.className;
-                      })()}
+                      {getDisplayNameForLanguage(item)}
                     </span>
                     <span className="admin-stats__missing-id">{item.specialId}</span>
                   </li>
@@ -1535,6 +1584,16 @@ const AdminPanel = () => {
               <span aria-hidden="true">−</span>
             </div>
             <div className="admin-stats__missing-panel">
+              <div className="admin-stats__missing-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={handleCopyClassesWithoutPriceAsText}
+                  aria-label={t('Copy IDs as text', 'نسخ الأكواد كنص', 'Copiar IDs como texto')}
+                >
+                  📋
+                </button>
+              </div>
               <ul>
                 {classesWithoutPrice.map((item) => (
                   <li 
@@ -1546,11 +1605,7 @@ const AdminPanel = () => {
                     style={{ cursor: 'pointer' }}
                   >
                     <span className="admin-stats__missing-name">
-                      {(() => {
-                        if (language === 'ar' && item.classNameArabic) return item.classNameArabic;
-                        if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
-                        return item.className;
-                      })()}
+                      {getDisplayNameForLanguage(item)}
                     </span>
                     <span className="admin-stats__missing-id">{item.specialId}</span>
                   </li>
@@ -1574,6 +1629,16 @@ const AdminPanel = () => {
               <span aria-hidden="true">−</span>
             </div>
             <div className="admin-stats__missing-panel">
+              <div className="admin-stats__missing-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => handleCopyClassListAsText(classesWithoutArabic)}
+                  aria-label={t('Copy IDs as text', 'نسخ الأكواد كنص', 'Copiar IDs como texto')}
+                >
+                  📋
+                </button>
+              </div>
               <ul>
                 {classesWithoutArabic.map((item) => (
                   <li 
@@ -1585,7 +1650,7 @@ const AdminPanel = () => {
                     style={{ cursor: 'pointer' }}
                   >
                     <span className="admin-stats__missing-name">
-                      {item.className}
+                      {getDisplayNameForLanguage(item)}
                     </span>
                     <span className="admin-stats__missing-id">{item.specialId}</span>
                   </li>
@@ -1609,6 +1674,16 @@ const AdminPanel = () => {
               <span aria-hidden="true">−</span>
             </div>
             <div className="admin-stats__missing-panel">
+              <div className="admin-stats__missing-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => handleCopyClassListAsText(classesWithoutEnglish)}
+                  aria-label={t('Copy IDs as text', 'نسخ الأكواد كنص', 'Copiar IDs como texto')}
+                >
+                  📋
+                </button>
+              </div>
               <ul>
                 {classesWithoutEnglish.map((item) => (
                   <li 
@@ -1620,7 +1695,7 @@ const AdminPanel = () => {
                     style={{ cursor: 'pointer' }}
                   >
                     <span className="admin-stats__missing-name">
-                      {language === 'ar' && item.classNameArabic ? item.classNameArabic : item.className}
+                      {getDisplayNameForLanguage(item)}
                     </span>
                     <span className="admin-stats__missing-id">{item.specialId}</span>
                   </li>
@@ -1644,6 +1719,16 @@ const AdminPanel = () => {
               <span aria-hidden="true">−</span>
             </div>
             <div className="admin-stats__missing-panel">
+              <div className="admin-stats__missing-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => handleCopyClassListAsText(classesWithoutName)}
+                  aria-label={t('Copy IDs as text', 'نسخ الأكواد كنص', 'Copiar IDs como texto')}
+                >
+                  📋
+                </button>
+              </div>
               <ul>
                 {classesWithoutName.map((item) => (
                   <li 
