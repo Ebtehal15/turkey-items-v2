@@ -7,6 +7,7 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import {
   bulkUploadClasses,
+  bulkReplaceClasses,
   createClass,
   deleteAllClasses,
   deleteClass,
@@ -33,8 +34,36 @@ import useTranslate from '../hooks/useTranslate';
 import { deleteOrderFromHistory, type OrderHistoryItem } from '../utils/orderHistory';
 import { fetchAllOrders, deleteOrder, type OrderResponse } from '../api/orders';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 
-  (import.meta.env.PROD ? 'https://cillii.onrender.com' : 'http://localhost:4000');
+// Dinamik API base URL - dış IP erişimi için
+const getApiBaseUrl = () => {
+  // Environment variable varsa onu kullan
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  
+  // Production'da Render URL'i kullan
+  if (import.meta.env.PROD) {
+    return 'https://cillii.onrender.com';
+  }
+  
+  // Development'ta dış IP erişimi için sabit IP kullan
+  // Dış IP: 192.168.1.204
+  const EXTERNAL_IP = '192.168.1.204';
+  
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    
+    // Eğer localhost değilse, belirtilen dış IP'yi kullan
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `http://${EXTERNAL_IP}:4000`;
+    }
+  }
+  
+  // Varsayılan olarak localhost
+  return 'http://localhost:4000';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 const joinBaseUrl = (base: string, path: string) => {
   const normalizedBase = base.replace(/\/$/, '');
@@ -84,6 +113,8 @@ const emptyForm: FormState = {
   deleteVideo: false,
 };
 
+type BulkReplaceField = 'mainCategory' | 'quality' | 'className' | 'classNameArabic' | 'classNameEnglish';
+
 const AdminPanel = () => {
   const [filters, setFilters] = useState<ClassFilters>({});
   const [formState, setFormState] = useState<FormState>(emptyForm);
@@ -100,6 +131,9 @@ const AdminPanel = () => {
   const [expandedPanel, setExpandedPanel] = useState<'video' | 'price' | 'arabic' | 'english' | 'name' | 'withVideo' | null>(null);
   const [orderHistory, setOrderHistory] = useState<OrderHistoryItem[]>([]);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
+  const [bulkReplaceField, setBulkReplaceField] = useState<BulkReplaceField>('quality');
+  const [bulkReplaceSearch, setBulkReplaceSearch] = useState('');
+  const [bulkReplaceValue, setBulkReplaceValue] = useState('');
   const [googleSheetsUrl, setGoogleSheetsUrl] = useState('');
   const [googleSheetsAutoSync, setGoogleSheetsAutoSync] = useState(false);
   const [showGoogleSheets, setShowGoogleSheets] = useState(() => {
@@ -172,16 +206,43 @@ const AdminPanel = () => {
 
   // Convert backend orders to OrderHistoryItem format for compatibility
   useEffect(() => {
-    const convertedOrders: OrderHistoryItem[] = backendOrders.map((order) => ({
-      orderId: order.orderId,
-      createdAt: order.createdAt,
-      customerInfo: order.customerInfo,
-      items: order.items,
-      knownTotal: order.knownTotal,
-      totalItems: order.totalItems,
-      hasUnknownPrices: order.hasUnknownPrices,
-      language: order.language,
-    }));
+    const convertedOrders: OrderHistoryItem[] = backendOrders.map((order) => {
+      // Ensure items is always an array
+      let items = order.items;
+      if (!items) {
+        console.warn('⚠️ Order', order.orderId, 'has no items field. totalItems:', order.totalItems);
+        items = [];
+      } else if (typeof items === 'string') {
+        try {
+          items = JSON.parse(items);
+          console.log('✅ Parsed items for order', order.orderId, ':', items.length, 'items');
+        } catch (e) {
+          console.error('❌ Failed to parse items JSON for order', order.orderId, ':', e, 'Raw items:', items);
+          items = [];
+        }
+      } else if (!Array.isArray(items)) {
+        console.warn('⚠️ Items is not an array for order', order.orderId, ':', items, 'Type:', typeof items);
+        items = [];
+      } else {
+        console.log('✅ Order', order.orderId, 'has', items.length, 'items (already array)');
+      }
+      
+      // Check for inconsistency
+      if (items.length === 0 && order.totalItems > 0) {
+        console.error('🚨 INCONSISTENCY: Order', order.orderId, 'has totalItems:', order.totalItems, 'but items array is empty!');
+      }
+      
+      return {
+        orderId: order.orderId,
+        createdAt: order.createdAt,
+        customerInfo: order.customerInfo,
+        items: items,
+        knownTotal: order.knownTotal,
+        totalItems: order.totalItems,
+        hasUnknownPrices: order.hasUnknownPrices,
+        language: order.language,
+      };
+    });
     setOrderHistory(convertedOrders);
   }, [backendOrders]);
 
@@ -570,6 +631,26 @@ const AdminPanel = () => {
     },
   });
 
+  const bulkReplaceMutation = useMutation<{ updatedCount: number }, AxiosError<{ message?: string; error?: string }>, { field: BulkReplaceField; search: string; replace: string }>({
+    mutationFn: bulkReplaceClasses,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: [CLASSES_QUERY_KEY] });
+      const message = t(
+        `Updated ${result.updatedCount} records.`,
+        `تم تحديث ${result.updatedCount} من السجلات.`,
+        `Se actualizaron ${result.updatedCount} registros.`,
+      );
+      setFeedback(message);
+      setErrorFeedback(null);
+      setBulkReplaceSearch('');
+      setBulkReplaceValue('');
+    },
+    onError: (mutationError) => {
+      setErrorFeedback(extractErrorMessage(mutationError));
+      setFeedback(null);
+    },
+  });
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFeedback(null);
@@ -673,37 +754,6 @@ const AdminPanel = () => {
     XLSX.writeFile(workbook, fileName);
   };
 
-  const exportToText = () => {
-    const headers = ['Special ID', 'Main Category', 'Group', 'Class Name', 'Class Name Arabic', 'Class Name English', 'Class Features', 'Class Price', 'Class Weight (kg)', 'Class Quantity', 'Class Video'];
-    const rows = classes.map((item) => [
-      item.specialId,
-      item.mainCategory,
-      item.quality,
-      item.className,
-      item.classNameArabic || '',
-      item.classNameEnglish || '',
-      item.classFeatures || '',
-      item.classPrice ?? '',
-      item.classWeight ?? '',
-      item.classQuantity ?? '',
-      item.classVideo || '',
-    ]);
-
-    const csvContent = [
-      headers.join('\t'),
-      ...rows.map((row) => row.map((cell) => String(cell).replace(/\t/g, ' ').replace(/\n/g, ' ')).join('\t')),
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `classes_export_${new Date().toISOString().split('T')[0]}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
 
   const formatCurrency = (value: number) => {
     if (Number.isNaN(value)) {
@@ -782,16 +832,16 @@ const AdminPanel = () => {
           ">
             <thead>
               <tr style="background: #0f172a; color: white;">
-                <th style="padding: 6px 4px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 9px; font-weight: bold;">${t('Code', 'الرمز', 'Código')}</th>
-                <th style="padding: 6px 4px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 9px; font-weight: bold;">${t('Group', 'المجموعة', 'Grupo')}</th>
-                <th style="padding: 6px 4px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 9px; font-weight: bold;">${t('Product Name', 'اسم المنتج', 'Nombre del producto')}</th>
-                <th style="padding: 6px 4px; text-align: center; font-size: 9px; font-weight: bold;">${t('Quantity', 'الكمية', 'Cantidad')}</th>
-                <th style="padding: 6px 4px; text-align: ${entryLanguage === 'ar' ? 'left' : 'right'}; font-size: 9px; font-weight: bold;">${t('Unit Price', 'سعر الوحدة', 'Precio unitario')}</th>
-                <th style="padding: 6px 4px; text-align: ${entryLanguage === 'ar' ? 'left' : 'right'}; font-size: 9px; font-weight: bold;">${t('Subtotal', 'الإجمالي الفرعي', 'Subtotal')}</th>
+                <th style="padding: 10px 8px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 13px; font-weight: bold;">${t('Code', 'الرمز', 'Código')}</th>
+                <th style="padding: 10px 8px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 13px; font-weight: bold;">${t('Group', 'المجموعة', 'Grupo')}</th>
+                <th style="padding: 10px 8px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 13px; font-weight: bold;">${t('Product Name', 'اسم المنتج', 'Nombre del producto')}</th>
+                <th style="padding: 10px 8px; text-align: center; font-size: 13px; font-weight: bold;">${t('Quantity', 'الكمية', 'Cantidad')}</th>
+                <th style="padding: 10px 8px; text-align: ${entryLanguage === 'ar' ? 'left' : 'right'}; font-size: 13px; font-weight: bold;">${t('Unit Price', 'سعر الوحدة', 'Precio unitario')}</th>
+                <th style="padding: 10px 8px; text-align: ${entryLanguage === 'ar' ? 'left' : 'right'}; font-size: 13px; font-weight: bold;">${t('Subtotal', 'الإجمالي الفرعي', 'Subtotal')}</th>
               </tr>
             </thead>
             <tbody>
-              ${entry.items.map((item, index) => {
+              ${(entry.items || []).map((item, index) => {
                 const name = (() => {
                   if (entryLanguage === 'ar' && item.classNameArabic) return item.classNameArabic;
                   if (entryLanguage === 'en' && item.classNameEnglish) return item.classNameEnglish;
@@ -801,16 +851,16 @@ const AdminPanel = () => {
                 const subtotal = item.classPrice ? item.classPrice * item.quantity : 0;
                 return `
                   <tr style="border-bottom: 1px solid #e5e7eb; ${index % 2 === 0 ? 'background: #f9fafb;' : 'background: white;'}">
-                    <td style="padding: 4px 6px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 8px;">${item.specialId}</td>
-                    <td style="padding: 4px 6px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 8px;">${item.quality || t('N/A', 'غير متوفر', 'No disponible')}</td>
-                    <td style="padding: 4px 6px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 8px;">${name}</td>
-                    <td style="padding: 4px 6px; text-align: center; font-size: 8px;">${item.quantity}</td>
-                    <td style="padding: 4px 6px; text-align: ${entryLanguage === 'ar' ? 'left' : 'right'}; font-size: 8px;">
+                    <td style="padding: 8px 10px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 12px;">${item.specialId}</td>
+                    <td style="padding: 8px 10px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 12px;">${item.quality || t('N/A', 'غير متوفر', 'No disponible')}</td>
+                    <td style="padding: 8px 10px; text-align: ${entryLanguage === 'ar' ? 'right' : 'left'}; font-size: 12px;">${name}</td>
+                    <td style="padding: 8px 10px; text-align: center; font-size: 12px;">${item.quantity}</td>
+                    <td style="padding: 8px 10px; text-align: ${entryLanguage === 'ar' ? 'left' : 'right'}; font-size: 12px;">
                       ${item.classPrice !== null && item.classPrice !== undefined
                         ? `$${formatCurrency(unitPrice)}`
                         : t('Contact for price', 'السعر عند الطلب', 'Precio bajo consulta')}
                     </td>
-                    <td style="padding: 4px 6px; text-align: ${entryLanguage === 'ar' ? 'left' : 'right'}; font-size: 8px;">
+                    <td style="padding: 8px 10px; text-align: ${entryLanguage === 'ar' ? 'left' : 'right'}; font-size: 12px;">
                       ${item.classPrice !== null && item.classPrice !== undefined
                         ? `$${formatCurrency(subtotal)}`
                         : t('N/A', 'غير متوفر', 'No disponible')}
@@ -963,7 +1013,7 @@ const AdminPanel = () => {
     const entryLanguage = entry.language || language;
 
     // Tek sheet, tek tablo: Order ID | Date | Code | Group | Product Name | Quantity | Unit Price | Subtotal
-    const rows = entry.items.map((item) => {
+    const rows = (entry.items || []).map((item) => {
       const name = (() => {
         if (entryLanguage === 'ar' && item.classNameArabic) return item.classNameArabic;
         if (entryLanguage === 'en' && item.classNameEnglish) return item.classNameEnglish;
@@ -1076,7 +1126,7 @@ const AdminPanel = () => {
     // Details Sheet: Her order'ın ürün detayları
     const detailsData: any[] = [];
     orderHistory.forEach((entry) => {
-      entry.items.forEach((item) => {
+      (entry.items || []).forEach((item) => {
         const name = (() => {
           const entryLanguage = entry.language || language;
           if (entryLanguage === 'ar' && item.classNameArabic) return item.classNameArabic;
@@ -1123,11 +1173,17 @@ const AdminPanel = () => {
           <p>{t('Manage product classes, upload media, and keep the catalog up to date.', 'إدارة أصناف المنتجات، وتحميل الوسائط، والحفاظ على الكتالوج محدثاً.', 'Administra los productos, sube contenido multimedia y mantiene el catálogo actualizado.')}</p>
         </div>
         <div className="panel__header-actions">
-          <button type="button" onClick={handleAddClick}>
+          <button type="button" className="admin-icon-btn" onClick={handleAddClick}>
+            <span className="admin-icon-btn__icon" aria-hidden="true">＋</span>
+            <span className="admin-icon-btn__label">
             {t('+ Add Class', '+ إضافة صنف', '+ Añadir Producto')}
+            </span>
           </button>
-          <button type="button" className="secondary" onClick={revoke}>
+          <button type="button" className="secondary admin-icon-btn" onClick={revoke}>
+            <span className="admin-icon-btn__icon" aria-hidden="true">🚪</span>
+            <span className="admin-icon-btn__label">
             {t('Sign Out', 'تسجيل الخروج', 'Cerrar sesión')}
+            </span>
           </button>
         </div>
       </header>
@@ -1812,7 +1868,7 @@ const AdminPanel = () => {
               </div>
             </div>
             <div className="table-card__controls">
-              <details className="column-switcher">
+              <details className="column-switcher" open>
                 <summary>{t('Columns', 'الأعمدة', 'Columnas')}</summary>
                 <div className="column-switcher__grid">
                   {columnOptionsWithLabels.map(({ key, label }) => {
@@ -1839,14 +1895,6 @@ const AdminPanel = () => {
                   disabled={!classes.length}
                 >
                   {t('Export Excel', 'تصدير Excel', 'Exportar Excel')}
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={exportToText}
-                  disabled={!classes.length}
-                >
-                  {t('Export Text', 'تصدير نص', 'Exportar Texto')}
                 </button>
                 <button
                   type="button"
@@ -1934,6 +1982,7 @@ const AdminPanel = () => {
                                   if (language === 'en' && item.classNameEnglish) return item.classNameEnglish;
                                   return item.className;
                                 })()}
+                                variant="icon"
                               />
                             );
                             break;
@@ -1947,8 +1996,9 @@ const AdminPanel = () => {
                         );
                       })}
                       <td className="table__actions" data-label={t('Actions', 'إجراءات', 'Acciones')}>
-                        <button type="button" onClick={() => handleEdit(item)}>
-                          {t('Edit', 'تعديل', 'Editar')}
+                        <button type="button" onClick={() => handleEdit(item)} title={t('Edit', 'تعديل', 'Editar')}>
+                          <span className="table__actions-icon" aria-hidden="true">✏️</span>
+                          <span className="table__actions-label">{t('Edit', 'تعديل', 'Editar')}</span>
                         </button>
                         <button
                           type="button"
@@ -1963,15 +2013,18 @@ const AdminPanel = () => {
                           }}
                           title={t('Price History', 'سجل الأسعار', 'Historial de Precios')}
                         >
-                          💰
+                          <span className="table__actions-icon" aria-hidden="true">💰</span>
+                          <span className="table__actions-label">{t('Price', 'السعر', 'Precio')}</span>
                         </button>
                         <button
                           type="button"
                           className="danger"
                           onClick={() => handleDelete(item)}
                           disabled={deleteMutation.isPending}
+                          title={t('Delete', 'حذف', 'Eliminar')}
                         >
-                          {t('Delete', 'حذف', 'Eliminar')}
+                          <span className="table__actions-icon" aria-hidden="true">🗑️</span>
+                          <span className="table__actions-label">{t('Delete', 'حذف', 'Eliminar')}</span>
                         </button>
                       </td>
                     </tr>
@@ -1996,7 +2049,7 @@ const AdminPanel = () => {
             accept=".xlsx,.xls"
             onChange={handleExcelChange}
           />
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem', cursor: 'pointer' }}>
+          <label className="bulk-upload__toggle">
             <input
               type="checkbox"
               checked={updateOnly}
@@ -2010,10 +2063,85 @@ const AdminPanel = () => {
               )}
             </span>
           </label>
-          <button type="submit" disabled={!excelFile || actionInProgress}>
+          <button
+            type="submit"
+            className="bulk-upload__submit"
+            disabled={!excelFile || actionInProgress}
+          >
             {t('Upload Excel', 'رفع ملف إكسل', 'Subir Excel')}
           </button>
         </form>
+
+        <div className="card bulk-replace">
+          <h2>{t('Bulk Text Replace', 'استبدال نص جماعي', 'Reemplazo de texto masivo')}</h2>
+          <p className="form__hint">
+            {t(
+              'Quickly normalize names. Example: replace "S - CREAM DUBAI" with "Cream Dubai" in the Group column.',
+              'قم بتوحيد الأسماء بسرعة. مثال: استبدل "S - CREAM DUBAI" بـ "Cream Dubai" في عمود المجموعة.',
+              'Normaliza nombres rápidamente. Ejemplo: reemplaza "S - CREAM DUBAI" por "Cream Dubai" en la columna Grupo.',
+            )}
+          </p>
+          <div className="bulk-replace__grid">
+            <label>
+              {t('Field', 'الحقل', 'Campo')}
+              <select
+                value={bulkReplaceField}
+                onChange={(e) => setBulkReplaceField(e.target.value as BulkReplaceField)}
+              >
+                <option value="mainCategory">{t('Main Category', 'الفئة الرئيسية', 'Categoría principal')}</option>
+                <option value="quality">{t('Group', 'المجموعة', 'Grupo')}</option>
+                <option value="className">{t('Class Name (Spanish)', 'اسم الصنف (إسباني)', 'Nombre del producto (Español)')}</option>
+                <option value="classNameArabic">{t('Class Name (Arabic)', 'اسم الصنف (عربي)', 'Nombre en árabe')}</option>
+                <option value="classNameEnglish">{t('Class Name (English)', 'اسم الصنف (إنجليزي)', 'Nombre en inglés')}</option>
+              </select>
+            </label>
+            <label>
+              {t('Find text', 'النص المطلوب إيجاده', 'Texto a buscar')}
+              <input
+                type="text"
+                value={bulkReplaceSearch}
+                onChange={(e) => setBulkReplaceSearch(e.target.value)}
+                placeholder={t('S - CREAM DUBAI', 'S - CREAM DUBAI', 'S - CREAM DUBAI')}
+              />
+            </label>
+            <label>
+              {t('Replace with', 'استبدل بـ', 'Reemplazar con')}
+              <input
+                type="text"
+                value={bulkReplaceValue}
+                onChange={(e) => setBulkReplaceValue(e.target.value)}
+                placeholder={t('Cream Dubai', 'Cream Dubai', 'Cream Dubai')}
+              />
+            </label>
+          </div>
+          <div className="bulk-replace__actions">
+            <button
+              type="button"
+              className="secondary"
+              disabled={!bulkReplaceSearch || bulkReplaceMutation.isPending}
+              onClick={() => {
+                if (!bulkReplaceSearch.trim()) {
+                  return;
+                }
+                const confirmed = window.confirm(t(
+                  'Apply this replacement to all records? This cannot be undone.',
+                  'تطبيق هذا الاستبدال على جميع السجلات؟ لا يمكن التراجع عن ذلك.',
+                  '¿Aplicar este reemplazo a todos los registros? No se puede deshacer.',
+                ));
+                if (!confirmed) return;
+                bulkReplaceMutation.mutate({
+                  field: bulkReplaceField,
+                  search: bulkReplaceSearch,
+                  replace: bulkReplaceValue,
+                });
+              }}
+            >
+              {bulkReplaceMutation.isPending
+                ? t('Replacing…', 'جاري الاستبدال…', 'Reemplazando…')
+                : t('Run Replace', 'تنفيذ الاستبدال', 'Ejecutar reemplazo')}
+            </button>
+          </div>
+        </div>
 
         {bulkReport && (
           <div className="card bulk-report">
@@ -2055,14 +2183,15 @@ const AdminPanel = () => {
 
         {/* Google Sheets Sync Section */}
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <div>
+          <div className="admin-card-header">
+            <div className="admin-card-header__content">
               <h2>{t('Google Sheets Sync', 'مزامنة Google Sheets', 'Sincronización de Google Sheets')}</h2>
               <p>{t('Sync your product data from an online Google Sheets document in real-time.', 'قم بمزامنة بيانات المنتجات من مستند Google Sheets عبر الإنترنت في الوقت الفعلي.', 'Sincroniza los datos de tus productos desde un documento de Google Sheets en línea en tiempo real.')}</p>
             </div>
+            <div className="admin-card-header__actions">
             <button
               type="button"
-              className="secondary"
+                className="secondary admin-icon-btn"
               onClick={() => {
                 setShowGoogleSheets(!showGoogleSheets);
                 if (!showGoogleSheets) {
@@ -2070,8 +2199,14 @@ const AdminPanel = () => {
                 }
               }}
             >
+                <span className="admin-icon-btn__icon" aria-hidden="true">
+                  {showGoogleSheets ? '▲' : '▼'}
+                </span>
+                <span className="admin-icon-btn__label">
               {showGoogleSheets ? t('Hide', 'إخفاء', 'Ocultar') : t('Show', 'عرض', 'Mostrar')}
+                </span>
             </button>
+            </div>
           </div>
 
           {showGoogleSheets && (
@@ -2168,14 +2303,15 @@ const AdminPanel = () => {
 
         {/* Price Changes Section */}
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <div>
+          <div className="admin-card-header">
+            <div className="admin-card-header__content">
               <h2>{t('Recent Price Changes', 'التغييرات الأخيرة في الأسعار', 'Cambios Recientes de Precios')}</h2>
               <p>{t('View all products that have had price changes recently.', 'عرض جميع المنتجات التي تغيرت أسعارها مؤخراً.', 'Ver todos los productos que han tenido cambios de precio recientemente.')}</p>
             </div>
+            <div className="admin-card-header__actions">
             <button
               type="button"
-              className="secondary"
+                className="secondary admin-icon-btn"
               onClick={() => {
                 setShowPriceChanges(!showPriceChanges);
                 if (!showPriceChanges) {
@@ -2183,8 +2319,14 @@ const AdminPanel = () => {
                 }
               }}
             >
+                <span className="admin-icon-btn__icon" aria-hidden="true">
+                  {showPriceChanges ? '▲' : '▼'}
+                </span>
+                <span className="admin-icon-btn__label">
               {showPriceChanges ? t('Hide', 'إخفاء', 'Ocultar') : t('Show', 'عرض', 'Mostrar')}
+                </span>
             </button>
+            </div>
           </div>
 
           {showPriceChanges && (
@@ -2194,24 +2336,27 @@ const AdminPanel = () => {
 
         {/* Order History Section */}
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <div>
+          <div className="admin-card-header">
+            <div className="admin-card-header__content">
               <h2>{t('All Orders', 'جميع الطلبات', 'Todos los Pedidos')}</h2>
               <p>{t('View and manage all order forms from all devices.', 'عرض وإدارة جميع نماذج الطلبات من جميع الأجهزة.', 'Ver y gestionar todos los formularios de pedidos de todos los dispositivos.')}</p>
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div className="admin-card-header__actions">
               {showOrderHistory && orderHistory.length > 0 && (
                 <button
                   type="button"
-                  className="secondary"
+                  className="secondary admin-icon-btn"
                   onClick={exportOrderHistoryToExcel}
                 >
+                  <span className="admin-icon-btn__icon" aria-hidden="true">📊</span>
+                  <span className="admin-icon-btn__label">
                   {t('Export Excel', 'تصدير Excel', 'Exportar Excel')}
+                  </span>
                 </button>
               )}
               <button
                 type="button"
-                className="secondary"
+                className="secondary admin-icon-btn"
                 onClick={async () => {
                   setShowOrderHistory(!showOrderHistory);
                   if (!showOrderHistory) {
@@ -2219,7 +2364,12 @@ const AdminPanel = () => {
                   }
                 }}
               >
+                <span className="admin-icon-btn__icon" aria-hidden="true">
+                  {showOrderHistory ? '▲' : '▼'}
+                </span>
+                <span className="admin-icon-btn__label">
                 {showOrderHistory ? t('Hide', 'إخفاء', 'Ocultar') : t('Show', 'عرض', 'Mostrar')}
+                </span>
               </button>
             </div>
           </div>
@@ -2255,31 +2405,51 @@ const AdminPanel = () => {
                           <div className="admin-order-history__actions">
                             <button
                               type="button"
-                              className="admin-order-history__btn"
+                              className="admin-order-history__btn admin-order-history__btn--open"
                               onClick={() => handleOpenOrderPdf(entry)}
                             >
+                              <span className="admin-order-history__btn-icon" aria-hidden="true">
+                                <img src="/pdf.png" alt="" className="admin-order-history__btn-icon-img" />
+                              </span>
+                              <span className="admin-order-history__btn-label">
                               {t('Open PDF', 'فتح PDF', 'Abrir PDF')}
+                              </span>
                             </button>
                             <button
                               type="button"
                               className="admin-order-history__btn admin-order-history__btn--share"
                               onClick={() => handleShareOrderPdf(entry)}
                             >
+                              <span className="admin-order-history__btn-icon" aria-hidden="true">
+                                <img src="/share.png" alt="" className="admin-order-history__btn-icon-img" />
+                              </span>
+                              <span className="admin-order-history__btn-label">
                               {t('Share', 'مشاركة', 'Compartir')}
+                              </span>
                             </button>
                             <button
                               type="button"
-                              className="admin-order-history__btn"
+                              className="admin-order-history__btn admin-order-history__btn--export"
                               onClick={() => exportSingleOrderToExcel(entry)}
                             >
+                              <span className="admin-order-history__btn-icon" aria-hidden="true">
+                                <img src="/logoexc.png" alt="" className="admin-order-history__btn-icon-img" />
+                              </span>
+                              <span className="admin-order-history__btn-label">
                               {t('Export Excel', 'تصدير Excel', 'Exportar Excel')}
+                              </span>
                             </button>
                             <button
                               type="button"
                               className="admin-order-history__btn admin-order-history__btn--delete"
                               onClick={() => handleDeleteOrder(entry.orderId)}
                             >
+                              <span className="admin-order-history__btn-icon" aria-hidden="true">
+                                <img src="/trash.png" alt="" className="admin-order-history__btn-icon-img" />
+                              </span>
+                              <span className="admin-order-history__btn-label">
                               {t('Delete', 'حذف', 'Eliminar')}
+                              </span>
                             </button>
                           </div>
                         </li>
@@ -2466,7 +2636,7 @@ const PriceChangesList = () => {
   const { language, t } = useTranslate();
   const { data: priceChanges = [], isLoading, error } = useQuery<PriceChangeItem[]>({
     queryKey: ['recentPriceChanges'],
-    queryFn: () => fetchRecentPriceChanges(100),
+    queryFn: () => fetchRecentPriceChanges(), // No limit - fetch all price changes
   });
 
   const formatCurrency = (value: number | null) => {

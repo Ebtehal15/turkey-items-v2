@@ -288,19 +288,21 @@ const CartSummary = () => {
           ` : ''}
         </div>
 
+        ${pdfCustomerInfo.notes && pdfCustomerInfo.notes.trim() ? `
         <div style="
-          margin-top: 15px;
-          padding: 10px 12px;
-          border-radius: 2px;
-          border: 1px solid #e5e7eb;
-          background: #ffffff;
+          margin-top: 20px;
+          padding: 12px 14px;
+          border-radius: 4px;
+          border: 1px solid #cbd5e1;
+          background: #f8fafc;
           text-align: ${pdfLanguage === 'ar' ? 'right' : 'left'};
         ">
-          <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: bold;">
+          <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #0f172a;">
             ${t('Notes', 'ملاحظات', 'Notas')}:
           </p>
-          <p style="margin: 0; font-size: 12px; white-space: pre-wrap; line-height: 1.4; min-height: 16px;">${pdfCustomerInfo.notes || ''}</p>
+          <p style="margin: 0; font-size: 13px; white-space: pre-wrap; line-height: 1.6; color: #1e293b; min-height: 20px;">${pdfCustomerInfo.notes}</p>
         </div>
+        ` : ''}
       </div>
     `;
 
@@ -408,9 +410,21 @@ const CartSummary = () => {
         // Backend'e kaydet (tüm cihazlardan erişilebilir olması için)
         try {
           await createOrder(historyEntry);
-        } catch (error) {
-          // Backend'e kaydetme hatası kritik değil, sadece log'la
-          console.error('Failed to save order to backend:', error);
+          console.log('✅ Order saved to backend successfully');
+        } catch (error: any) {
+          // Backend'e kaydetme hatasını kullanıcıya göster
+          const errorMessage = error?.response?.data?.message 
+            || error?.message 
+            || t('Failed to save order to server. Order saved locally only.', 'فشل حفظ الطلب على الخادم. تم حفظ الطلب محليًا فقط.', 'Error al guardar el pedido en el servidor. El pedido se guardó solo localmente.');
+          setFormError(errorMessage);
+          console.error('❌ Failed to save order to backend:', {
+            error,
+            message: error?.response?.data?.message || error?.message,
+            status: error?.response?.status,
+            orderId: historyEntry.orderId,
+          });
+          // Hata mesajını 5 saniye sonra temizle
+          setTimeout(() => setFormError(null), 5000);
         }
         
         // Download the PDF first

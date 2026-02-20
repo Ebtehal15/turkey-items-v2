@@ -196,10 +196,27 @@ router.put('/update', (req, res) => {
       }
 
       req.session.cartTotal = total;
-      res.json({
-        success: true,
-        message: 'Cart updated',
-        cartTotal: total,
+      
+      // Session'ı manuel olarak kaydet
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error('❌ Session save error:', saveErr);
+          return res.status(500).json({ error: 'Session save failed' });
+        }
+        
+        console.log('✅ Cart update success:', { 
+          classId, 
+          quantity,
+          total, 
+          cartLength: req.session.cart.length,
+          sessionId: req.sessionID,
+        });
+        
+        res.json({
+          success: true,
+          message: 'Cart updated',
+          cartTotal: total,
+        });
       });
     });
   } catch (error) {

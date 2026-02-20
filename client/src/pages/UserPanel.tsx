@@ -13,8 +13,36 @@ import {
 import useTranslate from '../hooks/useTranslate';
 import { useCart } from '../context/CartContext';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 
-  (import.meta.env.PROD ? 'https://cillii.onrender.com' : 'http://localhost:4000');
+// Dinamik API base URL - dış IP erişimi için
+const getApiBaseUrl = () => {
+  // Environment variable varsa onu kullan
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  
+  // Production'da Render URL'i kullan
+  if (import.meta.env.PROD) {
+    return 'https://cillii.onrender.com';
+  }
+  
+  // Development'ta dış IP erişimi için sabit IP kullan
+  // Dış IP: 192.168.1.204
+  const EXTERNAL_IP = '192.168.1.204';
+  
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    
+    // Eğer localhost değilse, belirtilen dış IP'yi kullan
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      return `http://${EXTERNAL_IP}:4000`;
+    }
+  }
+  
+  // Varsayılan olarak localhost
+  return 'http://localhost:4000';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 const joinBaseUrl = (base: string, path: string) => {
   const normalizedBase = base.replace(/\/$/, '');
@@ -253,13 +281,10 @@ const UserPanel = () => {
       ...prev,
       [name]: value || undefined,
     }));
-    
-    // On mobile, scroll to results when filter changes
-    if (window.innerWidth <= 768 && resultsRef.current) {
-      setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
-    }
+  };
+
+  const handleSearchClick = () => {
+    resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleClearFilters = () => {
@@ -311,24 +336,38 @@ const UserPanel = () => {
           <div className="catalog-filters__grid">
             <label>
               {t('Class Name', 'اسم الصنف', 'Nombre del producto')}
-              <input
-                type="search"
-                name="classNameSearch"
-                value={filters.classNameSearch ?? ''}
-                onChange={handleFilterChange}
-                placeholder={t('Search by class name', 'ابحث باسم الصنف', 'Buscar por nombre del producto')}
-              />
+              <div className="catalog-filters__input-group">
+                <input
+                  type="search"
+                  name="classNameSearch"
+                  value={filters.classNameSearch ?? ''}
+                  onChange={handleFilterChange}
+                  placeholder={t('Search by class name', 'ابحث باسم الصنف', 'Buscar por nombre del producto')}
+                />
+                <button type="button" className="catalog-filters__search-btn" onClick={handleSearchClick} aria-label={t('Search', 'بحث', 'Buscar')}>
+                  <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M7 12a5 5 0 100-10 5 5 0 000 10zM14 14l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              </div>
             </label>
 
             <label>
               {t('Code', 'الرمز', 'Código')}
-              <input
-                type="search"
-                name="codeSearch"
-                value={filters.codeSearch ?? ''}
-                onChange={handleFilterChange}
-                placeholder={t('Search by code', 'ابحث بالرمز', 'Buscar por código')}
-              />
+              <div className="catalog-filters__input-group">
+                <input
+                  type="search"
+                  name="codeSearch"
+                  value={filters.codeSearch ?? ''}
+                  onChange={handleFilterChange}
+                  placeholder={t('Search by code', 'ابحث بالرمز', 'Buscar por código')}
+                />
+                <button type="button" className="catalog-filters__search-btn" onClick={handleSearchClick} aria-label={t('Search', 'بحث', 'Buscar')}>
+                  <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M7 12a5 5 0 100-10 5 5 0 000 10zM14 14l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              </div>
             </label>
 
             <label>
@@ -520,6 +559,15 @@ const UserPanel = () => {
                           })()}
                           variant="card"
                         />
+                        {item.classVideo && item.classVideo.startsWith('/uploads/') && (
+                          <a
+                            href={resolveVideoSrc(item.classVideo) || undefined}
+                            download
+                            className="catalog-card__download-link"
+                          >
+                            {t('Download video', 'تحميل الفيديو', 'Descargar video')}
+                          </a>
+                        )}
                       </div>
                     )}
                   </div>

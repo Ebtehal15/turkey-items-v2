@@ -13,7 +13,9 @@ const NavBar = () => {
   const { language, t, setLanguage } = useTranslate();
   const { totalItems } = useCart();
   const [isCartOpen, setCartOpen] = useState(false);
+  const [isLangDropdownOpen, setLangDropdownOpen] = useState(false);
   const cartRef = useRef<HTMLDivElement>(null);
+  const langDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isCartOpen) {
@@ -31,6 +33,28 @@ const NavBar = () => {
       document.body.style.overflow = '';
     };
   }, [isCartOpen]);
+
+  useEffect(() => {
+    if (!isLangDropdownOpen) {
+      return;
+    }
+    const handleClickOutside = (event: MouseEvent) => {
+      if (langDropdownRef.current && !langDropdownRef.current.contains(event.target as Node)) {
+        setLangDropdownOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setLangDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isLangDropdownOpen]);
 
   const labels = {
     brand: t('AJ International Group', 'AJ International Group', 'AJ International Group'),
@@ -98,7 +122,39 @@ const NavBar = () => {
               document.body,
             )}
         </div>
-        <div className="nav__lang-group">
+        <div className="nav__lang-group" ref={langDropdownRef}>
+          <button
+            type="button"
+            className="nav__lang-btn nav__lang-btn--dropdown-trigger"
+            onClick={() => setLangDropdownOpen(!isLangDropdownOpen)}
+            aria-label={t('Select language', 'اختر اللغة', 'Seleccionar idioma')}
+            aria-expanded={isLangDropdownOpen}
+          >
+            {languageOptions.find((opt) => opt.code === language)?.label || 'EN'}
+            <span className="nav__lang-dropdown-arrow" aria-hidden="true">
+              {isLangDropdownOpen ? '▲' : '▼'}
+            </span>
+          </button>
+          {isLangDropdownOpen && (
+            <div className="nav__lang-dropdown">
+              {languageOptions.map(({ code, label, aria }) => (
+                <button
+                  key={code}
+                  type="button"
+                  className={`nav__lang-dropdown-item ${language === code ? 'nav__lang-dropdown-item--active' : ''}`}
+                  onClick={() => {
+                    setLanguage(code);
+                    setLangDropdownOpen(false);
+                  }}
+                  aria-label={aria}
+                >
+                  {label}
+                  <span className="nav__lang-dropdown-label">{aria}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="nav__lang-group--desktop">
           {languageOptions.map(({ code, label, aria }) => (
             <button
               key={code}
@@ -111,6 +167,7 @@ const NavBar = () => {
               {label}
             </button>
           ))}
+          </div>
         </div>
       </nav>
     </header>

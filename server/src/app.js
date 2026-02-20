@@ -15,17 +15,41 @@ initializeDatabase();
 const app = express();
 
 // 🔹 Genel Middleware
-app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:3000', 
-    'https://cillii-1.onrender.com'
-  ],
+// CORS yapılandırması - dış IP erişimi için esnek
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Geliştirme ortamında (NODE_ENV production değilse) veya CORS_ALLOW_ALL=true ise tüm origin'lere izin ver
+    // Bu sayede dış IP'lerden erişim mümkün olur
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+    const allowAll = process.env.CORS_ALLOW_ALL === 'true';
+    
+    if (isDevelopment || allowAll) {
+      // Development'ta veya açıkça izin verilmişse tüm origin'lere izin ver
+      callback(null, true);
+    } else {
+      // Production'da sadece belirtilen origin'lere izin ver
+      const allowedOrigins = [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://cillii-1.onrender.com',
+        ...(process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : [])
+      ];
+      // Origin yoksa (örneğin same-origin request) veya izin verilen listede varsa kabul et
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn('⚠️ CORS blocked origin:', origin);
+        callback(new Error('CORS policy violation'));
+      }
+    }
+  },
   credentials: true, // Session cookie'leri için kritik
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   optionsSuccessStatus: 200,
-}));
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -99,8 +123,10 @@ app.use('/api/orders', ordersRouter);
 
 // ✅ Sunucuyu başlat
 const port = process.env.PORT || 4000;
-app.listen(port, () => {
-  console.log(`🚀 Server running on http://localhost:${port}`);
+const host = process.env.HOST || '0.0.0.0'; // Tüm ağ arayüzlerinde dinle
+app.listen(port, host, () => {
+  console.log(`🚀 Server running on http://${host}:${port}`);
+  console.log(`🌐 Accessible from external IPs on port ${port}`);
 });
 
 module.exports = app;
