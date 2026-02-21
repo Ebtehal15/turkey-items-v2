@@ -7,9 +7,10 @@ const getApiBaseUrl = () => {
     return import.meta.env.VITE_API_BASE_URL;
   }
   
-  // Production'da Render URL'i kullan
+  // Production'da aynı origin kullan (tek servis deploy: frontend + API aynı host)
+  // Ayrı frontend deploy için VITE_API_BASE_URL kullanın
   if (import.meta.env.PROD) {
-    return 'https://cillii.onrender.com';
+    return '';
   }
   
   // Development'ta dış IP erişimi için sabit IP kullan

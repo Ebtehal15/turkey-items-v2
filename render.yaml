@@ -1,0 +1,15 @@
+# Render Blueprint - Cilii uygulaması (tek servis: API + React frontend)
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    runtime: node
+    name: cilii
+    buildCommand: "cd client && npm install && npm run build && cd ../server && npm install"
+    startCommand: "cd server && npm start"
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true

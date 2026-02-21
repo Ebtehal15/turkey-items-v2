@@ -61,7 +61,7 @@ app.use(session({
   rolling: false, // Cookie süresini sabit tut
   name: 'connect.sid', // Standart session name
   cookie: {
-    secure: false, // Önce false deneyelim
+    secure: process.env.NODE_ENV === 'production', // HTTPS'te true (Render)
     httpOnly: false, // JavaScript erişimi için false
     maxAge: 24 * 60 * 60 * 1000, // 24 saat
     sameSite: 'lax', // Daha uyumlu seçenek
@@ -120,6 +120,17 @@ app.use('/api/classes', classesRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/orders', ordersRouter);
+
+// ✅ Production: React client build'ini servis et (Render tek servis deploy)
+const isProduction = process.env.NODE_ENV === 'production';
+const clientDistPath = path.resolve(__dirname, '..', '..', 'client', 'dist');
+if (isProduction && require('fs').existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path === '/health') return next();
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 // ✅ Sunucuyu başlat
 const port = process.env.PORT || 4000;
