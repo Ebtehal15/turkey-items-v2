@@ -1,0 +1,15 @@
+# Ortam / gizli bilgiler
+.env
+.env.local
+.env.*.local
+
+# Bağımlılıklar
+node_modules/
+
+# Build / upload (içerik push edilmez, klasör sunucuda oluşur)
+server/uploads/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.log
