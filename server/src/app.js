@@ -126,7 +126,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const clientDistPath = path.resolve(__dirname, '..', '..', 'client', 'dist');
 if (isProduction && require('fs').existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
-  app.get('*', (req, res, next) => {
+  app.get('/(.*)', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path === '/health') return next();
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
