@@ -25,6 +25,11 @@ services:
     name: cilii-web
     buildCommand: "cd client && npm install && npm run build"
     staticPublishPath: client/dist
+    routes:
+      # SPA (React Router) için tüm yolları index.html'e yönlendir
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       # Backend API URL (Node servisinin adresi)
       # Deploy sonrası örnek: https://cilii.onrender.com
