@@ -121,27 +121,6 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/orders', ordersRouter);
 
-// ✅ Production: React client build'ini servis et (Render tek servis deploy)
-const isProduction = process.env.NODE_ENV === 'production';
-// Yol: server/src'den iki üst = repo root, oradan client/dist
-let clientDistPath = path.resolve(__dirname, '..', '..', 'client', 'dist');
-if (!require('fs').existsSync(clientDistPath) && process.cwd() !== __dirname) {
-  clientDistPath = path.resolve(process.cwd(), '..', 'client', 'dist');
-}
-const clientDistExists = require('fs').existsSync(clientDistPath);
-if (isProduction) {
-  console.log('📁 Client dist path:', clientDistPath, '| exists:', clientDistExists);
-}
-if (isProduction && clientDistExists) {
-  app.use(express.static(clientDistPath));
-  app.get('/', (req, res) => {
-    res.sendFile(path.join(clientDistPath, 'index.html'));
-  });
-  app.get(/^\/(?!api|uploads|health).*/, (req, res) => {
-    res.sendFile(path.join(clientDistPath, 'index.html'));
-  });
-}
-
 // ✅ Sunucuyu başlat
 const port = process.env.PORT || 4000;
 const host = process.env.HOST || '0.0.0.0'; // Tüm ağ arayüzlerinde dinle

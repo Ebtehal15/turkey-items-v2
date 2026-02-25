@@ -1,11 +1,12 @@
-# Render Blueprint - Cilii uygulaması (tek servis: API + React frontend)
+# Render Blueprint - 2 servis: API (Node) + Frontend (Static)
 # https://render.com/docs/blueprint-spec
 
 services:
+  # 1) Backend API (Node)
   - type: web
     runtime: node
     name: cilii
-    buildCommand: "cd client && NODE_ENV=development npm install && npm run build && cd ../server && npm install"
+    buildCommand: "cd server && npm install"
     startCommand: "cd server && npm start"
     healthCheckPath: /health
     envVars:
@@ -13,3 +14,19 @@ services:
         value: production
       - key: SESSION_SECRET
         generateValue: true
+      # Frontend URL'ini CORS için ekleyin (Static site deploy sonrası)
+      # Örnek: https://cilii-web.onrender.com
+      - key: CORS_ORIGINS
+        sync: false
+
+  # 2) Frontend (Static - React build)
+  - type: web
+    runtime: static
+    name: cilii-web
+    buildCommand: "cd client && npm install && npm run build"
+    staticPublishPath: client/dist
+    envVars:
+      # Backend API URL (Node servisinin adresi)
+      # Deploy sonrası örnek: https://cilii.onrender.com
+      - key: VITE_API_BASE_URL
+        sync: false

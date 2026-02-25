@@ -1,6 +1,6 @@
-# Render'a Deploy Etme
+# Render'a Deploy Etme (2 servis)
 
-Bu proje tek bir Web Service olarak Render'da çalışır: hem API hem React arayüzü aynı URL'den sunulur.
+Bu proje **iki ayrı servis** olarak Render'da çalışır: **API (Node)** + **Frontend (Static)**.
 
 ## 1. GitHub'a push
 
@@ -12,40 +12,45 @@ git branch -M main
 git push -u origin main
 ```
 
-## 2. Render'da servis oluşturma
-
-**Blueprint ile (önerilen):**
+## 2. Render'da servis oluşturma (Blueprint)
 
 1. [render.com](https://render.com) → giriş yapın
 2. **Dashboard** → **New** → **Blueprint**
 3. Repoyu bağlayın (GitHub hesabıyla)
-4. Repo seçin; Render `render.yaml` dosyasını bulacak ve servisi oluşturacak
+4. Repo seçin; Render `render.yaml` dosyasını okuyup **2 servis** oluşturur:
+   - **cilii** – Node (API)
+   - **cilii-web** – Static (React frontend)
 5. **Apply** ile deploy başlatın
 
-**Manuel:**
+## 3. Environment değişkenleri (önemli)
 
-1. **New** → **Web Service**
-2. Repoyu bağlayıp bu repoyu seçin
-3. Ayarlar:
-   - **Name:** `cilii` (veya istediğiniz isim)
-   - **Runtime:** Node
-   - **Build Command:** `cd client && npm install && npm run build && cd ../server && npm install`
-   - **Start Command:** `cd server && npm start`
-   - **Health Check Path:** `/health`
-4. **Environment** sekmesinde:
-   - `NODE_ENV` = `production`
-   - `SESSION_SECRET` = güvenli rastgele bir değer (Render "Generate" ile de oluşturabilir)
-5. **Create Web Service** ile deploy başlatın
+Deploy bittikten sonra her iki serviste de URL'leri ayarlayın.
 
-## 3. Deploy sonrası
+### Backend servisi (cilii – Node)
 
-- Uygulama `https://SERVIS_ADI.onrender.com` adresinde açılır
-- Ücretsiz planda servis 15 dakika işlem yoksa uyur; ilk istekte 1–2 dakika uyanır
-- **Not:** SQLite kullanıyorsunuz; Render’da disk kalıcı değildir. Her deploy’da veritabanı sıfırlanır. Kalıcı veri için ileride Render Postgres veya harici bir DB kullanabilirsiniz
+- **Environment** sekmesine girin.
+- **CORS_ORIGINS** ekleyin (frontend adresi):
+  - Değer: `https://cilii-web.onrender.com`  
+  - (Static site adınız farklıysa onu yazın; virgülle birden fazla ekleyebilirsiniz.)
 
-## 4. Sonraki push'lar
+### Frontend servisi (cilii-web – Static)
 
-Kod değişikliği yaptıktan sonra:
+- **Environment** sekmesine girin.
+- **VITE_API_BASE_URL** ekleyin (API adresi):
+  - Değer: `https://cilii.onrender.com`  
+  - (Backend servis adınız farklıysa onu yazın.)
+- Bu değişkeni ekledikten veya değiştirdikten sonra **mutlaka yeniden deploy** alın (Build’i tekrar çalıştırın); aksi halde frontend eski API URL’ini kullanır.
+
+## 4. Deploy sonrası
+
+- **Frontend:** `https://cilii-web.onrender.com` (veya kendi Static site adınız)
+- **API:** `https://cilii.onrender.com` (veya kendi Node servis adınız)
+
+Ücretsiz planda servisler ~15 dakika işlem yoksa uyur; ilk istekte 1–2 dakika uyanır.
+
+**Not:** SQLite kullanıyorsanız Render’da disk kalıcı değildir; her deploy’da veritabanı sıfırlanabilir. Kalıcı veri için Render Postgres veya harici bir DB kullanabilirsiniz.
+
+## 5. Sonraki push'lar
 
 ```bash
 git add .
@@ -53,4 +58,4 @@ git commit -m "Değişiklik açıklaması"
 git push origin main
 ```
 
-Render, `main` branch’e her push’ta otomatik yeni deploy başlatır (Blueprint’te `autoDeployTrigger` kapatılmadıysa).
+Render, `main` branch’e her push’ta her iki servisi de otomatik yeniden deploy eder (Blueprint ayarlarında kapatılmadıysa).
